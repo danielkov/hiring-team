@@ -64,19 +64,18 @@
 - [ ] 4. Implement job board and Project synchronization
   - [ ] 4.1 Create Project synchronization module
     - Implement syncProjects function to fetch Projects from ATS Container
+    - Implement webhook for required Linear events
     - Create getPublishedJobs function filtering by "In Progress" status
-    - Implement job listing cache with Redis or in-memory store
-    - Create cache invalidation logic for Project updates
     - _Requirements: 2.1, 2.2_
   
   - [ ]* 4.2 Write property test for job listing visibility
     - **Property 5: Job listing visibility based on Project status**
     - **Validates: Requirements 2.1, 2.2**
   
-  - [ ] 4.3 Create public job board API routes
-    - Implement GET /api/jobs endpoint returning published listings
-    - Implement GET /api/jobs/[id] endpoint for specific job details
-    - Add server-side rendering for job board pages
+  - [ ] 4.3 Create public job board pages
+    - Implement GET /jobs/[linearOrg] page for published listings by Linear organization
+    - Implement GET /jobs/[linearOrg]/[id] page for specific job details
+    - Pages should be server-side rendered
     - _Requirements: 2.1, 2.2_
   
   - [ ]* 4.4 Write unit tests for job board API
