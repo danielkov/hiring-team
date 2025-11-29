@@ -35,6 +35,7 @@ An Applicant Tracking System that uses Linear as its source of truth, with AI ca
    ```
 
 4. Fill in your API keys and secrets in `.env.local`
+   - **LINEAR_API_KEY**: Get this from Linear Settings → API → Personal API Keys (create a new key with read access to your workspace)
 
 ### Development
 

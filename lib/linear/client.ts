@@ -83,3 +83,19 @@ export async function hasLinearConnected(): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Get Linear client using app credentials (for public/unauthenticated access)
+ * This requires LINEAR_API_KEY to be set in environment variables
+ */
+export function getLinearAppClient(): LinearClient {
+  const apiKey = process.env.LINEAR_API_KEY;
+  
+  if (!apiKey) {
+    throw new Error('LINEAR_API_KEY not configured. Please add it to your environment variables.');
+  }
+  
+  return new LinearClient({
+    apiKey,
+  });
+}

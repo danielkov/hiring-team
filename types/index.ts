@@ -21,6 +21,7 @@ export interface JobListing {
   id: string; // Linear Project ID
   title: string;
   description: string;
+  content: string;
   status: string;
   createdAt: Date;
   updatedAt: Date;

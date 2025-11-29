@@ -4,7 +4,9 @@
  * Server-side rendered page showing detailed information for a specific job listing
  */
 
-import { getJobListingById } from '@/lib/linear/projects';
+import { Card, CardTitle } from '@/components/ui/card';
+import { getJobListingByIdForOrg } from '@/lib/linear/projects';
+import { SparklesIcon } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
@@ -21,7 +23,7 @@ export default async function JobDetailsPage({ params }: JobDetailsPageProps) {
   let job;
   
   try {
-    job = await getJobListingById(id);
+    job = await getJobListingByIdForOrg(linearOrg, id);
   } catch (err) {
     console.error('Failed to fetch job:', err);
     return (
@@ -52,11 +54,11 @@ export default async function JobDetailsPage({ params }: JobDetailsPageProps) {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto px-4 py-12">
+      <div className="max-w-4xl mx-auto px-4 py-12 flex flex-col gap-6">
         {/* Back link */}
         <Link
           href={`/jobs/${linearOrg}`}
-          className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-8"
+          className="inline-flex items-center text-gray-600 hover:text-gray-900"
         >
           <svg
             className="w-5 h-5 mr-2"
@@ -75,34 +77,17 @@ export default async function JobDetailsPage({ params }: JobDetailsPageProps) {
         </Link>
 
         {/* Job header */}
-        <header className="bg-white rounded-lg shadow-sm p-8 mb-8 border border-gray-200">
+        <Card className='px-6'>
           <div className="flex items-start justify-between mb-4">
             <h1 className="text-4xl font-bold text-gray-900">
               {job.title}
             </h1>
             {job.isAIGenerated && (
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+              <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 inline-flex items-center">
                 AI Enhanced
               </span>
             )}
           </div>
-          
-          <div className="flex items-center gap-6 text-sm text-gray-500">
-            <span>
-              Posted {new Date(job.createdAt).toLocaleDateString()}
-            </span>
-            <span>
-              Updated {new Date(job.updatedAt).toLocaleDateString()}
-            </span>
-          </div>
-        </header>
-
-        {/* Job description */}
-        <div className="bg-white rounded-lg shadow-sm p-8 mb-8 border border-gray-200">
-          <h2 className="text-2xl font-semibold text-gray-900 mb-4">
-            About this role
-          </h2>
-          
           {job.description ? (
             <div className="prose prose-gray max-w-none">
               {job.description.split('\n').map((paragraph, index) => (
@@ -113,15 +98,36 @@ export default async function JobDetailsPage({ params }: JobDetailsPageProps) {
                 )
               ))}
             </div>
+          ) : null}
+          
+          <div className="flex items-center gap-6 text-sm text-gray-500">
+            <span>
+              Posted {new Date(job.createdAt).toLocaleDateString()}
+            </span>
+            <span>
+              Updated {new Date(job.updatedAt).toLocaleDateString()}
+            </span>
+          </div>
+        </Card>
+
+        {/* Job description */}
+        <Card className='px-6'>
+          <CardTitle>
+            About this role
+          </CardTitle>
+          
+          {job.content ? (
+            <div className="prose prose-gray max-w-none" dangerouslySetInnerHTML={{__html: job.content}} />
           ) : (
             <p className="text-gray-500 italic">
               No description available for this position.
             </p>
           )}
-        </div>
+        </Card>
+
 
         {/* Application CTA */}
-        <div className="bg-white rounded-lg shadow-sm p-8 border border-gray-200">
+        <Card className='px-6'>
           <h2 className="text-2xl font-semibold text-gray-900 mb-4">
             Ready to apply?
           </h2>
@@ -135,7 +141,7 @@ export default async function JobDetailsPage({ params }: JobDetailsPageProps) {
               Application form coming soon
             </p>
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );
@@ -145,10 +151,10 @@ export default async function JobDetailsPage({ params }: JobDetailsPageProps) {
  * Generate metadata for SEO
  */
 export async function generateMetadata({ params }: JobDetailsPageProps) {
-  const { id } = await params;
+  const { linearOrg, id } = await params;
   
   try {
-    const job = await getJobListingById(id);
+    const job = await getJobListingByIdForOrg(linearOrg, id);
     
     if (!job) {
       return {

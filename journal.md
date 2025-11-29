@@ -221,3 +221,7 @@ Elapsed time: 4m 46s
 ```
 
 Interestingly, credit usage does not seem to go up as the project advances. If this is based off of token usage, a comparison I can make here is Claude Code and Cursor, both of which use more and more tokens as the project grows as they find more files to read randomly without intent. Seems like Kiro does not suffer from side-quest fever.
+
+Upon a bit of research, turns out I was wrong about Linear API access via authorised apps. What I need to do is when the user first authenticates, I also need to associate the workspace with the access token I get from Linear. I can then look this up on unathenticated requests.
+
+The approach I took here - mostly using vibe code - bit of hand-coding where I felt like the LLM struggled to comprehend: add Upstash Redis as a layer to store all of the config we initially stored on each user object. This way we can imprersonate users when we need unauthenticated access. This will helps us in the next steps when we want to actually create Linear issues from submissions.

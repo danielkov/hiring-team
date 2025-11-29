@@ -4,11 +4,14 @@
  * Handles fetching and managing Linear Projects for job listings
  */
 
-import { getLinearClient } from './client';
-import { Project, ProjectStatus } from '@linear/sdk';
+import { createLinearClient, getLinearClient } from './client';
+import { Project } from '@linear/sdk';
 import { getATSContainerInitiativeId } from './metadata';
 import { withAuth } from '@workos-inc/authkit-nextjs';
 import { JobListing } from '@/types';
+import { getOrgConfig } from '../redis';
+import { remark } from 'remark';
+import html from 'remark-html';
 
 /**
  * Fetch all Projects from the ATS Container Initiative
@@ -82,6 +85,7 @@ export async function getPublishedJobs(): Promise<JobListing[]> {
       id: project.id,
       title: project.name,
       description: project.description || '',
+      content: project.content || '',
       status: 'In Progress',
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
@@ -134,6 +138,7 @@ export async function getJobListingById(projectId: string): Promise<JobListing |
     id: project.id,
     title: project.name,
     description: project.description || '',
+    content: project.content || '',
     status: 'In Progress',
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
@@ -142,12 +147,137 @@ export async function getJobListingById(projectId: string): Promise<JobListing |
 }
 
 /**
- * Get published jobs for a specific Linear organization
- * This is used for the public job board
+ * Get a specific job listing by ID for a specific organization (unauthenticated)
+ * This is used for the public job board and uses the org config from Redis
  */
-export async function getPublishedJobsByOrg(_linearOrgId: string): Promise<JobListing[]> {
-  // For now, we'll use the authenticated user's context
-  // In a production system, you might want to cache this data
-  // or use a different approach for public access
-  return await getPublishedJobs();
+export async function getJobListingByIdForOrg(linearOrg: string, projectId: string): Promise<JobListing | null> {
+  
+  // Get the org config from Redis
+  const config = await getOrgConfig(linearOrg);
+  
+  if (!config) {
+    throw new Error('Organization configuration not found. Please sync your configuration to Redis first.');
+  }
+  
+  // Create Linear client with org token
+  const client = createLinearClient(config.accessToken);
+  
+  try {
+    // Fetch the project
+    const project = await client.project(projectId);
+    
+    if (!project) {
+      return null;
+    }
+
+    // Check if project is published (In Progress status)
+    const inProgress = await isProjectInProgress(project);
+    
+    if (!inProgress) {
+      return null;
+    }
+
+    // Verify the project belongs to the correct initiative
+    const projectInitiatives = await project.initiatives();
+    const belongsToAtsContainer = projectInitiatives.nodes.some(
+      (initiative) => initiative.id === config.atsContainerInitiativeId
+    );
+
+    if (!belongsToAtsContainer) {
+      return null;
+    }
+
+    // Check for ai-generated label
+    const labels = await project.labels();
+    const hasAIGeneratedLabel = labels.nodes.some(
+      (label) => label.name === 'ai-generated'
+    );
+
+    const processedContent = await remark()
+      .use(html)
+      .process(project.content || '');
+    const contentHtml = processedContent.toString();
+
+    return {
+      id: project.id,
+      title: project.name,
+      description: project.description || '',
+      // when we fetch the job using this utility, we also convert markdown to HTML
+      content: contentHtml,
+      status: 'In Progress',
+      createdAt: project.createdAt,
+      updatedAt: project.updatedAt,
+      isAIGenerated: hasAIGeneratedLabel,
+    };
+  } catch (error) {
+    console.error('Failed to fetch project:', error);
+    return null;
+  }
+}
+
+/**
+ * Get published jobs for a specific Linear organization
+ * This is used for the public job board and uses the org config from Redis
+ */
+export async function getPublishedJobsByOrg(linearOrg: string): Promise<JobListing[]> {
+  
+  // Get the org config from Redis
+  const config = await getOrgConfig(linearOrg);
+  
+  if (!config) {
+    throw new Error('Organization configuration not found. Please sync your configuration to Redis first.');
+  }
+  
+  // Create Linear client with org token
+  const client = createLinearClient(config.accessToken);
+  
+  // Fetch the organization
+  const organization = await client.organization;
+  
+  // Verify we're accessing the correct organization
+  if (organization.name !== linearOrg) {
+    throw new Error('Organization mismatch');
+  }
+  
+  // Fetch all projects with "In Progress" status using the initiative ID from config
+  const projectsConnection = await client.projects({
+    filter: {
+      status: {
+        name: {
+          eq: "In Progress"
+        },
+      },
+      initiatives: {
+        id: {
+          eq: config.atsContainerInitiativeId,
+        },
+      },
+    },
+  });
+  
+  const projects = projectsConnection.nodes;
+  
+  // Transform to JobListing format
+  const jobListings: JobListing[] = [];
+  
+  for (const project of projects) {
+    // Check for ai-generated label
+    const labels = await project.labels();
+    const hasAIGeneratedLabel = labels.nodes.some(
+      (label) => label.name === 'ai-generated'
+    );
+
+    jobListings.push({
+      id: project.id,
+      title: project.name,
+      description: project.description || '',
+      content: project.content || '',
+      status: 'In Progress',
+      createdAt: project.createdAt,
+      updatedAt: project.updatedAt,
+      isAIGenerated: hasAIGeneratedLabel,
+    });
+  }
+
+  return jobListings;
 }

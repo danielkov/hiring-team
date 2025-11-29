@@ -4,9 +4,11 @@
  * Server-side rendered page showing all published job listings for a Linear organization
  */
 
-import { getPublishedJobsByOrg } from '@/lib/linear/projects';
 import Link from 'next/link';
+
+import { getPublishedJobsByOrg } from '@/lib/linear/projects';
 import { JobListing } from '@/types';
+import { SparklesIcon } from 'lucide-react';
 
 interface JobBoardPageProps {
   params: Promise<{
@@ -80,7 +82,7 @@ export default async function JobBoardPage({ params }: JobBoardPageProps) {
                       </span>
                       {job.isAIGenerated && (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          AI Enhanced
+                          <SparklesIcon className='w-3 h-3' /> AI Enhanced
                         </span>
                       )}
                     </div>
