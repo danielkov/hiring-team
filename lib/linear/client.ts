@@ -1,11 +1,12 @@
 /**
  * Linear SDK Client
  * 
- * Provides authenticated Linear SDK client instances
+ * Provides authenticated Linear SDK client instances using WorkOS metadata
  */
 
 import { LinearClient } from '@linear/sdk';
-import { getSession, updateSession, isLinearTokenExpired } from '../auth/session';
+import { withAuth } from '@workos-inc/authkit-nextjs';
+import { getLinearTokens, storeLinearTokens, isLinearTokenExpired } from './metadata';
 import { refreshLinearToken } from './oauth';
 
 /**
@@ -13,32 +14,34 @@ import { refreshLinearToken } from './oauth';
  * Automatically refreshes token if expired
  */
 export async function getLinearClient(): Promise<LinearClient> {
-  const session = await getSession();
+  const { user } = await withAuth();
 
-  if (!session) {
+  if (!user) {
     throw new Error('No active session');
   }
 
-  if (!session.linearAccessToken) {
+  // Get Linear tokens from WorkOS metadata
+  const tokens = await getLinearTokens(user.id);
+
+  if (!tokens) {
     throw new Error('Linear not connected. Please authorize Linear integration.');
   }
 
   // Check if token is expired and refresh if needed
-  if (isLinearTokenExpired(session)) {
-    if (!session.linearRefreshToken) {
-      throw new Error('Linear token expired and no refresh token available');
-    }
-
+  if (isLinearTokenExpired(tokens)) {
     try {
       const { accessToken, refreshToken, expiresIn } = await refreshLinearToken(
-        session.linearRefreshToken
+        tokens.refreshToken
       );
 
-      // Update session with new tokens
-      await updateSession({
-        linearAccessToken: accessToken,
-        linearRefreshToken: refreshToken,
-        linearTokenExpiry: Date.now() + expiresIn * 1000,
+      // Calculate new expiry
+      const expiresAt = Date.now() + expiresIn * 1000;
+
+      // Update WorkOS metadata with new tokens
+      await storeLinearTokens(user.id, {
+        accessToken,
+        refreshToken,
+        expiresAt,
       });
 
       // Return client with new token
@@ -53,7 +56,7 @@ export async function getLinearClient(): Promise<LinearClient> {
 
   // Return client with current token
   return new LinearClient({
-    accessToken: session.linearAccessToken,
+    accessToken: tokens.accessToken,
   });
 }
 
@@ -64,4 +67,19 @@ export function createLinearClient(accessToken: string): LinearClient {
   return new LinearClient({
     accessToken,
   });
+}
+
+/**
+ * Check if user has Linear connected
+ */
+export async function hasLinearConnected(): Promise<boolean> {
+  try {
+    const { user } = await withAuth();
+    if (!user) return false;
+    
+    const tokens = await getLinearTokens(user.id);
+    return tokens !== null;
+  } catch {
+    return false;
+  }
 }

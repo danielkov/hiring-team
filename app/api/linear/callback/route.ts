@@ -1,27 +1,27 @@
 /**
  * Linear OAuth Callback Handler
- * Processes authorization code and stores tokens in session
+ * Processes authorization code and stores tokens in WorkOS user metadata
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { exchangeCodeForToken } from '@/lib/linear/oauth';
-import { getSession, updateSession } from '@/lib/auth/session';
+import { storeLinearTokens } from '@/lib/linear/metadata';
 import { config } from '@/lib/config';
+import { withAuth } from '@workos-inc/authkit-nextjs';
 
 export async function GET(request: NextRequest) {
+  const { user } = await withAuth();
+  
+  if (!user) {
+    const loginUrl = new URL('/api/auth/login', config.app.url);
+    loginUrl.searchParams.set('error', 'session_required');
+    return NextResponse.redirect(loginUrl);
+  }
+
   const searchParams = request.nextUrl.searchParams;
   const code = searchParams.get('code');
   const state = searchParams.get('state');
   const error = searchParams.get('error');
-
-  // Verify user is authenticated with WorkOS
-  const session = await getSession();
-  
-  if (!session) {
-    const loginUrl = new URL('/login', config.app.url);
-    loginUrl.searchParams.set('error', 'session_required');
-    return NextResponse.redirect(loginUrl);
-  }
 
   // Handle OAuth errors
   if (error) {
@@ -42,18 +42,19 @@ export async function GET(request: NextRequest) {
     const { accessToken, refreshToken, expiresIn } = await exchangeCodeForToken(code);
 
     // Calculate token expiry timestamp
-    const tokenExpiry = Date.now() + expiresIn * 1000;
+    const expiresAt = Date.now() + expiresIn * 1000;
 
-    // Update session with Linear tokens
-    await updateSession({
-      linearAccessToken: accessToken,
-      linearRefreshToken: refreshToken,
-      linearTokenExpiry: tokenExpiry,
+    // Store tokens in WorkOS user metadata
+    await storeLinearTokens(user.id, {
+      accessToken,
+      refreshToken,
+      expiresAt,
     });
 
-    // Redirect to onboarding or original destination
-    const redirectPath = state || '/onboarding';
+    // Redirect to original destination or dashboard
+    const redirectPath = state || '/dashboard';
     const redirectUrl = new URL(redirectPath, config.app.url);
+    redirectUrl.searchParams.set('success', 'linear_connected');
     
     return NextResponse.redirect(redirectUrl);
   } catch (err) {

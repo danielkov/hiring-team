@@ -5,15 +5,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getLinearAuthorizationUrl } from '@/lib/linear/oauth';
-import { getSession } from '@/lib/auth/session';
 import { config } from '@/lib/config';
+import { withAuth } from '@workos-inc/authkit-nextjs';
 
 export async function GET(request: NextRequest) {
-  // Verify user is authenticated with WorkOS first
-  const session = await getSession();
+  const { user } = await withAuth();
   
-  if (!session) {
-    const loginUrl = new URL('/login', config.app.url);
+  if (!user) {
+    const loginUrl = new URL('/api/auth/login', config.app.url);
     loginUrl.searchParams.set('error', 'session_required');
     return NextResponse.redirect(loginUrl);
   }

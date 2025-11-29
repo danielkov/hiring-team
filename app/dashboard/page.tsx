@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
 import { signOut, withAuth } from "@workos-inc/authkit-nextjs";
-import Link from "next/link";
 
 export default async function DashboardPage() {
     const { user } = await withAuth({ ensureSignedIn: true });

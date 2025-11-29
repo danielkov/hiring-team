@@ -78,3 +78,24 @@ Ended up just re-rolling auth from scratch, since the Kiro setup was totally unu
 
 When you have something running in the terminal, when Kiro tries to run commands, it just sends them to stdin of that process, instead of creating a new terminal. This is incredibly useless, since most everyone will want to have something running while they're working on a project.
 
+
+## Linear implementation
+
+Again, a key principle I requested was ignored. I asked for it to implement actor authentication, instead of trying to impersonate a user. This is key to making this whole project work. This is also something where I linked the docs (which were ignored).
+
+It also based persistence on its brittle hand-rolled WorkOS integration based on updated JWTs in cookies. I decided to try vibe coding to fix this.
+
+> At this point it's apparent that Kiro ***DOES NOT CHECK THE INTERNET***. I think this is a major flaw and it makes it close to useless at implementing anything meaningful. It does put links in comments, though, which I find funny.
+
+Another fucky thing is that it left a MIGRATION_NOTES.md, that's almost longer than the entire code output. There's very little use in these in fully agent-driven environments. Adding legacy information for posterity can be nice for humans, but it greatly reduces the quality of output for LLMs. It also wasted a bunch of tokens on this.
+
+I had to manually edit the implementation in a few places, because it does not check linter output and does not look up web pages. If it just followed the website I've sent it, it would've been able to one-shot this task no problem.
+
+Vibe coding use:
+
+```
+Credits used: 2.46
+Elapsed time: 4m 5s
+```
+
+

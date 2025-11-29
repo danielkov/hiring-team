@@ -1,44 +1,43 @@
 /**
  * Linear Disconnect Route
- * Revokes Linear access and removes tokens from session
+ * Removes Linear tokens from WorkOS user metadata
  */
 
-import { NextResponse } from 'next/server';
-import { getSession, updateSession } from '@/lib/auth/session';
+import { NextRequest, NextResponse } from 'next/server';
+import { removeLinearTokens, getLinearTokens } from '@/lib/linear/metadata';
 import { revokeLinearToken } from '@/lib/linear/oauth';
+import { withAuth } from '@workos-inc/authkit-nextjs';
 
-export async function POST() {
-  const session = await getSession();
-
-  if (!session) {
+export async function POST(request: NextRequest) {
+  const { user } = await withAuth();
+  
+  if (!user) {
     return NextResponse.json(
-      { error: 'Not authenticated' },
+      { error: 'Unauthorized' },
       { status: 401 }
     );
   }
 
-  if (!session.linearAccessToken) {
-    return NextResponse.json(
-      { error: 'Linear not connected' },
-      { status: 400 }
-    );
-  }
-
   try {
-    // Revoke Linear access token
-    await revokeLinearToken(session.linearAccessToken);
+    // Get current tokens to revoke them
+    const tokens = await getLinearTokens(user.id);
+    
+    if (tokens) {
+      // Revoke the access token with Linear
+      try {
+        await revokeLinearToken(tokens.accessToken);
+      } catch (error) {
+        console.error('Failed to revoke Linear token:', error);
+        // Continue with removal even if revocation fails
+      }
+    }
 
-    // Remove Linear tokens from session
-    await updateSession({
-      linearAccessToken: undefined,
-      linearRefreshToken: undefined,
-      linearTokenExpiry: undefined,
-      atsContainerInitiativeId: undefined,
-    });
+    // Remove tokens from WorkOS metadata
+    await removeLinearTokens(user.id);
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Failed to disconnect Linear:', error);
+    console.error('Linear disconnect error:', error);
     return NextResponse.json(
       { error: 'Failed to disconnect Linear' },
       { status: 500 }

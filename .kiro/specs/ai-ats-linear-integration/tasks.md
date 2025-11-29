@@ -35,8 +35,8 @@
     - Test token refresh logic
     - _Requirements: 1.1, 1.2_
 
-- [ ] 3. Implement onboarding and Linear setup
-  - [ ] 3.1 Create Initiative management interface
+- [-] 3. Implement onboarding and Linear setup
+  - [-] 3.1 Create Initiative management interface
     - Implement fetchInitiatives function using Linear SDK
     - Create UI component for displaying Initiative list
     - Implement Initiative selection and creation logic
