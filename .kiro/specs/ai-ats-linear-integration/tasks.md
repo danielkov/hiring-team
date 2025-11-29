@@ -35,8 +35,8 @@
     - Test token refresh logic
     - _Requirements: 1.1, 1.2_
 
-- [-] 3. Implement onboarding and Linear setup
-  - [-] 3.1 Create Initiative management interface
+- [x] 3. Implement onboarding and Linear setup
+  - [x] 3.1 Create Initiative management interface
     - Implement fetchInitiatives function using Linear SDK
     - Create UI component for displaying Initiative list
     - Implement Initiative selection and creation logic
@@ -51,7 +51,7 @@
     - **Property 3: Initiative selection provides both options**
     - **Validates: Requirements 1.4**
   
-  - [ ] 3.4 Implement Tone of Voice Document management
+  - [x] 3.4 Implement Tone of Voice Document management
     - Create function to check for existing Tone of Voice Document in Initiative
     - Implement default Tone of Voice Document creation logic
     - Create ensureToneOfVoiceDocument function combining check and creation

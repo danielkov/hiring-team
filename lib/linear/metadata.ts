@@ -89,3 +89,43 @@ export async function removeLinearTokens(userId: string): Promise<void> {
     throw new Error('Failed to disconnect Linear');
   }
 }
+
+/**
+ * Store ATS Container Initiative ID in WorkOS user metadata
+ */
+export async function storeATSContainerInitiativeId(
+  userId: string,
+  initiativeId: string
+): Promise<void> {
+  try {
+    await workos.userManagement.updateUser({
+      userId,
+      metadata: {
+        atsContainerInitiativeId: initiativeId,
+      },
+    });
+  } catch (error) {
+    console.error('Failed to store ATS Container Initiative ID in WorkOS metadata:', error);
+    throw new Error('Failed to save ATS Container configuration');
+  }
+}
+
+/**
+ * Get ATS Container Initiative ID from WorkOS user metadata
+ */
+export async function getATSContainerInitiativeId(userId: string): Promise<string | null> {
+  try {
+    const user = await workos.userManagement.getUser(userId);
+    
+    const metadata = user.metadata as Record<string, unknown>;
+    
+    if (!metadata?.atsContainerInitiativeId) {
+      return null;
+    }
+
+    return metadata.atsContainerInitiativeId as string;
+  } catch (error) {
+    console.error('Failed to retrieve ATS Container Initiative ID from WorkOS metadata:', error);
+    return null;
+  }
+}

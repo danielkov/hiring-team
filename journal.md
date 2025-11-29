@@ -98,4 +98,20 @@ Credits used: 2.46
 Elapsed time: 4m 5s
 ```
 
+## Linear onboarding
 
+As a common theme, it once again - attempted to add completely useless tests to the tune of importing functions from other modules and checking if their type is of `"function"`. It then failed to run these tests, since it tried to import modules from auto-generated NextJS directories. It then deleted the new tests, ran the old test stubs and finally celebrated itself for making all tests pass.
+
+It also did something it hadn't done before: it actually started building UI. This is great, because the human in the loop finally gets to interact with the app. If you check commit history, you'll see there was UI committed, however, this is just random stuff I added to allow me to test sign up and sign out end to end. Without these makeshift UIs, I'd have had no way to verify anything works until now.
+
+Something that Claude Code does very well: it instructs you to update parts where you're missing credentials, like API keys, tokens etc. I've not seen this from Kiro yet. It has incredibly verbose output, with a lot of waffling on about what it's done, yet it omits this very important info.
+
+I like the speed of iteration in Kiro. It's the fastest I've seen so far of any IDE-based vibe coding product. I don't think the specs are detailed enough for it to be able to delegate work like this to super-cheap models, like Claude Haiku. Then again, the quality of the output is sub-par at best, and entirely useless at worst (see the initial WorkOS integration).
+
+Anecdotally, it could work really well, if it produced more in-depth specs. It's also very interesting how it directs itself to skip tests, yet it seems like the entire methodology behind Kiro is set up around tests, so it's constatly doing the equivalent of dangling its feet above a puddle and gloating about being an olympic swimming champion.
+
+> I just can't place Kiro. If it's truly for vibe coders, it's nowhere near noob-friendly enough. It doesn't guide the user through the steps they need to take to make apps like this work. If it's for advanced software engineers, it's just a crappy tool. It really needs to have internet access. Without it, it's almost entirely useless.
+
+At this point I need to acquire an app ID and token from Linear. I have no idea how to do this. Linear docs are not very forthcoming about this process. I'd expect Kiro to find this out for me and output a guide or something. I'm nervous to ask though. I know it won't search the internet, so the information will most likely be wrong. I'm at 18.37 credits used at this point. I'm afraid it won't finish this tiny project with the 50 credits I have access to.
+
+Another thing I really hate about how Kiro set this project up, is that it adds an API route for everything. In NextJS 16, the only remaining use-case for API routes is if it needs to have a stable URL that makes it accessible for outside use-cases. Most API routes Kiro added do not meet that criteria. I don't know how to make Kiro aware of this. I'm going to try vibe coding a fix for this, because it makes the entire app logic brittle to file renames and adds needless maintenance overhead.
