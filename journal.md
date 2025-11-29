@@ -149,3 +149,75 @@ const payload = await client.createDocument({
 ```
 
 This clearly failed, since Linear couldn't find a project with our initiative ID. I'm so surprised it failed on something so trivial, while it set some pretty complex workflows up, including an onboarding flow that depends on multiple third-parties playing ball.
+
+## Showing actual job listings
+
+I've decided to edit the task list, since it was coupled to the concept of API routes. New tasks focused on building pages. The hope is that Kiro picks up on the project already being heavily built on server actions (since the refactor) and it adjusts its expectations (that produced the initial API-route oriented approach).
+
+I can't help but follow Kiro's progress. I'm noticing a lot of usages of deprecated Linear SDK methods and attributes. About half of the properties it used weren't even available anymore. I'm going to have to fix this by hand once it's done. Interestingly it does check diagnostics, but it doesn't do much with the output and it'll happily leave them red and claim the task is done.
+
+We don't yet have the AI enhanced workflow set up. This is fine. I'm testing the new pages Kiro set up, by creating some test projects in Linear.
+
+The nastiest mistake it made is - again - rather than taking 2 seconds to check online what the right API is for Linear, it failed to add the right heuristic for checking project status. It cooked up a random check that's in no way accurate:
+
+```ts
+/**
+ * Check if a project has "In Progress" status
+ * In Linear, we check the project's progress/status
+ */
+async function isProjectInProgress(project: Project): Promise<boolean> {
+  // Linear projects have a progress field that can be checked
+  // For now, we'll use a simple heuristic based on the project's state
+  // In a real implementation, you'd check against the actual workflow state
+  
+  // Check if project has started and is not completed
+  const progress = project.progress;
+  
+  // A project is "In Progress" if it has some progress but is not complete
+  // progress is a number between 0 and 1
+  return progress > 0 && progress < 1;
+}
+```
+
+Instead, all it had to do was this:
+
+```ts
+/**
+ * Check if a project has "In Progress" status
+ * In Linear, we check the project's status
+ */
+async function isProjectInProgress(project: Project): Promise<boolean> {
+  // Check if project has started and is not completed
+  const status = await project.status;
+  
+  // A project is "In Progress" if it has some progress but is not complete
+  // progress is a number between 0 and 1
+  return status?.name === "In Progress";
+}
+```
+
+Another key error in its implementation is this:
+
+```ts
+/**
+ * Get published jobs for a specific Linear organization
+ * This is used for the public job board
+ */
+export async function getPublishedJobsByOrg(_linearOrgId: string): Promise<JobListing[]> {
+  // For now, we'll use the authenticated user's context
+  // In a production system, you might want to cache this data
+  // or use a different approach for public access
+  return await getPublishedJobs();
+}
+```
+
+The oversight here, is that we actually have a Linear app, which is authenticated to fetch projects from this workspace, so we don't need the user's token here at all. We can just authenticate as "the app" and fetch projects that way. I'm giving vibe coding mode another chance to shine on this task.
+
+Credit usage for this task:
+
+```
+Credits used: 5.54
+Elapsed time: 4m 46s
+```
+
+Interestingly, credit usage does not seem to go up as the project advances. If this is based off of token usage, a comparison I can make here is Claude Code and Cursor, both of which use more and more tokens as the project grows as they find more files to read randomly without intent. Seems like Kiro does not suffer from side-quest fever.

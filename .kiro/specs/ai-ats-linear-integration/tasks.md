@@ -61,8 +61,8 @@
     - **Property 4: Tone of Voice Document existence guarantee**
     - **Validates: Requirements 1.5, 1.6**
 
-- [ ] 4. Implement job board and Project synchronization
-  - [ ] 4.1 Create Project synchronization module
+- [x] 4. Implement job board and Project synchronization
+  - [x] 4.1 Create Project synchronization module
     - Implement syncProjects function to fetch Projects from ATS Container
     - Implement webhook for required Linear events
     - Create getPublishedJobs function filtering by "In Progress" status
@@ -72,7 +72,7 @@
     - **Property 5: Job listing visibility based on Project status**
     - **Validates: Requirements 2.1, 2.2**
   
-  - [ ] 4.3 Create public job board pages
+  - [x] 4.3 Create public job board pages
     - Implement GET /jobs/[linearOrg] page for published listings by Linear organization
     - Implement GET /jobs/[linearOrg]/[id] page for specific job details
     - Pages should be server-side rendered
