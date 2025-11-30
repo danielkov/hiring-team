@@ -328,3 +328,47 @@ CV parsing failed: Error: Failed to parse CV file: Failed to parse PDF: Setting 
 ```
 
 Threw this error back at the chat, see if it can fix it. The issue is that in NextJS, we need to mark packages that depend on spawning workers as external. It tried adding Webpack config to solve this, but of course, this is NextJS 16, so Turbopack is enabled by default. I was pleasantly surprised when instead of downgrading NextJS, like a lot of other tools would do, it managed to port the config to Turbopack instantly.
+
+## Candidate pre-screening
+
+Seems like this is the right task size for Kiro. Sub-tasks take a lot less time to complete (2-3 mins) and use fewer credits. This heuristic could be used to inform Kiro's planning output, to better prepare for the optimal task size.
+
+### The good
+
+It added a fairly decent prompt. Looks like it reads from other adjacent files or at least there's some sort of RAG step, because the style of this prompt matched very closely the style of the prompt I used for improving job descriptions.
+
+```
+## Output Format:
+
+You must respond with a valid JSON object in the following format:
+
+{
+  "confidence": "high" | "low" | "ambiguous",
+  "reasoning": "A clear explanation of your assessment",
+  "matchedCriteria": ["Specific criterion 1 with evidence", "Specific criterion 2 with evidence"],
+  "concerns": ["Specific concern 1", "Specific concern 2"]
+}
+
+Important: Return ONLY the JSON object, no additional text or formatting.
+```
+
+### The bad
+
+It forgot a key property, which enhances Cerebras' output:
+
+```ts
+response_format: {
+  type: "json_object",
+},
+```
+
+I added this manually.
+
+For some reason Kiro decided to add an extra function that maps the confidence level of the AI response to the desired issue state, instead of using `.recommendedState` on the response. This makes 0 sense in this context. The right heuristic is defined in the `design.md` and `tasks.md` files. Truly puzzling.
+
+> Moments like these are very important. They signal to me, that I still need to review every line of AI-generated code. Can't let Kiro free-range.
+
+
+## Mapping issue states
+
+There was another bug, where we were trying to set issue states. There's no mention of this in the original design, but you can have any number of issue states in Linear, but there's no guarantee, that our user would've set these up themselves. I asked Kiro vibe mode to add a helper to ensure issue states exist, before adding them.

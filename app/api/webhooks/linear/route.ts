@@ -11,6 +11,7 @@ import { getOrgConfig } from '@/lib/redis';
 import { createLinearClient } from '@/lib/linear/client';
 import { getToneOfVoiceContent } from '@/lib/linear/documents';
 import { enhanceJobDescription } from '@/lib/cerebras/job-description';
+import { triggerPreScreening } from '@/lib/linear/pre-screening';
 
 /**
  * Verify webhook signature using HMAC
@@ -88,6 +89,17 @@ async function handleProjectChange(event: any): Promise<void> {
       return;
     }
 
+    // Verify the Project belongs to the ATS Container Initiative (early check)
+    const initiatives = await project.initiatives();
+    const initiative = initiatives.nodes.find(
+      init => init.id === orgConfig.atsContainerInitiativeId
+    );
+
+    if (!initiative) {
+      console.log('Project does not belong to ATS Container Initiative, skipping enhancement');
+      return;
+    }
+
     // Get project labels
     const labels = await project.labels();
     const hasEnhanceLabel = labels.nodes.some(label => label.name === 'enhance');
@@ -104,17 +116,6 @@ async function handleProjectChange(event: any): Promise<void> {
     
     if (!originalContent) {
       console.error('Project has no content to enhance');
-      return;
-    }
-
-    // Get the initiative to load tone of voice document
-    const initiatives = await project.initiatives();
-    const initiative = initiatives.nodes.find(
-      init => init.id === orgConfig.atsContainerInitiativeId
-    );
-
-    if (!initiative) {
-      console.error('Project does not belong to ATS Container Initiative');
       return;
     }
 
@@ -174,13 +175,56 @@ async function handleProjectChange(event: any): Promise<void> {
  * Handle Issue creation events
  */
 async function handleIssueCreation(event: any): Promise<void> {
+  const issueId = event.data?.id;
+  
   console.log('Issue created:', {
-    issueId: event.data?.id,
+    issueId,
     projectId: event.data?.project?.id,
   });
   
-  // TODO: Implement AI pre-screening trigger
-  // This will be implemented in task 11 (AI pre-screening agent)
+  if (!issueId) {
+    console.error('Missing issue ID in webhook event');
+    return;
+  }
+  
+  try {
+    // Extract organization URL key from webhook event
+    const orgUrlKey = event.url?.split('/')[3];
+    
+    if (!orgUrlKey) {
+      console.error('Could not extract organization URL key from webhook event');
+      return;
+    }
+    
+    // Get organization config from Redis
+    const orgConfig = await getOrgConfig(orgUrlKey);
+    
+    if (!orgConfig) {
+      console.error('Organization config not found in Redis:', orgUrlKey);
+      return;
+    }
+    
+    // Trigger AI pre-screening
+    const screeningResult = await triggerPreScreening(
+      orgConfig.accessToken,
+      issueId,
+      orgConfig.atsContainerInitiativeId
+    );
+    
+    if (screeningResult) {
+      console.log('Pre-screening completed successfully:', {
+        issueId,
+        confidence: screeningResult.confidence,
+        recommendedState: screeningResult.recommendedState,
+      });
+    } else {
+      console.log('Pre-screening was not triggered for Issue:', issueId);
+    }
+  } catch (error) {
+    // Handle errors gracefully - log and continue
+    console.error('Error during Issue creation handling:', error);
+    // Don't throw - we want the webhook to succeed even if pre-screening fails
+  }
 }
 
 /**
