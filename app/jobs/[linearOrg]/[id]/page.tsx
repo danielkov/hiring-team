@@ -5,8 +5,8 @@
  */
 
 import { Card, CardTitle } from '@/components/ui/card';
+import { ApplicationForm } from '@/components/application-form';
 import { getJobListingByIdForOrg } from '@/lib/linear/projects';
-import { SparklesIcon } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
@@ -126,8 +126,8 @@ export default async function JobDetailsPage({ params }: JobDetailsPageProps) {
         </Card>
 
 
-        {/* Application CTA */}
-        <Card className='px-6'>
+        {/* Application Form */}
+        <div>
           <h2 className="text-2xl font-semibold text-gray-900 mb-4">
             Ready to apply?
           </h2>
@@ -135,13 +135,8 @@ export default async function JobDetailsPage({ params }: JobDetailsPageProps) {
             Submit your application and we'll get back to you as soon as possible.
           </p>
           
-          {/* TODO: This will be implemented in task 8 (application form) */}
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center">
-            <p className="text-gray-600">
-              Application form coming soon
-            </p>
-          </div>
-        </Card>
+          <ApplicationForm jobId={id} linearOrg={linearOrg} />
+        </div>
       </div>
     </div>
   );

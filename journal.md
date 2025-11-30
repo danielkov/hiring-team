@@ -225,3 +225,13 @@ Interestingly, credit usage does not seem to go up as the project advances. If t
 Upon a bit of research, turns out I was wrong about Linear API access via authorised apps. What I need to do is when the user first authenticates, I also need to associate the workspace with the access token I get from Linear. I can then look this up on unathenticated requests.
 
 The approach I took here - mostly using vibe code - bit of hand-coding where I felt like the LLM struggled to comprehend: add Upstash Redis as a layer to store all of the config we initially stored on each user object. This way we can imprersonate users when we need unauthenticated access. This will helps us in the next steps when we want to actually create Linear issues from submissions.
+
+Tried out-of-order task running. All requirements were met, so this task could be completed by Kiro. Still seems to be obsessed with building API routes, even if not explicitly told so, and/or if server functions are mentioned. I'd rather not start adding "DO NOT USE API ROUTES" in the tasks, but it seems like I might need to. This time I interrupted it and asked it to use server actions and it obliged.
+
+```
+The implementation follows Next.js 14+ best practices with server actions, providing a seamless user experience with proper validation at both client and server levels.
+```
+
+...Says Kiro. Our Next.js version is 16. Seems like it's maybe not aware, or just trying to generalise?
+
+I also realised I can just ask Kiro to update tasks. I've asked it to split 9, which was arbitrarily split into 9.1 and 9.2 to instead be split based on Linear (9.1) and LiquidMetal (9.2) to allow me to work on these separately.

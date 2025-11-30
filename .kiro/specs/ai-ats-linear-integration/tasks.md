@@ -137,17 +137,16 @@
     - Test replay attack prevention
     - _Requirements: 2.6_
 
-- [ ] 8. Implement application submission and validation
-  - [ ] 8.1 Create application form component
+- [x] 8. Implement application submission and validation
+  - [x] 8.1 Create application form component
     - Build React form component with Name, Email, CV, and Cover Letter fields
     - Implement client-side validation with real-time feedback
     - Add file upload handling with drag-and-drop support
     - Implement file type and size validation (PDF, DOC, DOCX, max 10MB)
     - _Requirements: 3.1_
   
-  - [ ] 8.2 Create application submission API
-    - Implement POST /api/jobs/[id]/apply endpoint
-    - Create validateApplication function with email format and required field checks
+  - [x] 8.2 Create application submission API
+    - Create validateApplication server function with email format and required field checks
     - Implement error response with specific field-level error messages
     - _Requirements: 3.1, 3.2_
   
@@ -166,21 +165,21 @@
     - _Requirements: 3.1, 3.2_
 
 - [ ] 9. Implement candidate Issue creation
-  - [ ] 9.1 Create LiquidMetal SmartBuckets integration
+  - [ ] 9.1 Implement Linear Issue creation workflow
+    - Create createCandidateIssue function using Linear SDK
+    - Implement CV upload as Linear Document attachment linked to Issue
+    - Implement cover letter upload as Linear Document attachment (conditional)
+    - Set Issue state to "Triage" on creation
+    - Update submitApplication in lib/actions/application.ts to call createCandidateIssue
+    - _Requirements: 3.3, 3.4, 3.5, 3.6_
+  
+  - [ ] 9.2 Create LiquidMetal SmartBuckets integration
     - Implement SmartBuckets client initialization
     - Create uploadToSmartBuckets function with file streaming
     - Implement retrieveFromSmartBuckets function for document access
     - Add error handling and retry logic for uploads
-    - _Requirements: 5.1, 5.3_
-  
-  - [ ] 9.2 Implement Issue creation workflow
-    - Create createCandidateIssue function using Linear SDK
-    - Implement CV upload to SmartBuckets with streaming
-    - Create Linear Document attachment linking CV to Issue
-    - Store SmartBuckets reference URL in Issue description or custom field
-    - Implement cover letter upload and attachment (conditional)
-    - Set Issue state to "Triage" on creation
-    - _Requirements: 3.3, 3.4, 3.5, 3.6_
+    - Store SmartBuckets reference URL in Issue description or custom field for AI access
+    - _Requirements: 5.1, 5.3, 5.4_
   
   - [ ]* 9.3 Write property test for Issue creation
     - **Property 10: Issue creation for valid applications**
