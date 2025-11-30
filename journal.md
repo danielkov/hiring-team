@@ -314,3 +314,17 @@ Failed to replace text in .kiro/specs/ai-ats-linear-integration/tasks.md. Invali
 This is the first time I saw Kiro fail to edit a file. It's extremely reliable compared to something like Claude Code, which fails 30-50% of the time, or Cursor, that fails to write files 10-20% of the time. Unfortunately, it was not able to recover from this, the agent panel froze and no progress was made for 5+ minutes. I decided to stop it manually and try again.
 
 It ended up re-writing the entire tasks.md file. I was too lazy to read it all, so I just accepted and moved on.
+
+## Process CV and cover letter
+
+DOCX works fine (one-shot). PDF fails with:
+
+```
+CV parsing failed: Error: Failed to parse CV file: Failed to parse PDF: Setting up fake worker failed: "Cannot find module '/Users/.../projects/linear-ats/.next/dev/server/chunks/ssr/pdf.worker.mjs' imported from /Users/.../projects/linear-ats/.next/dev/server/chunks/ssr/95353_pdfjs-dist_legacy_build_pdf_mjs_527c99d9._.js".
+
+    at parseCV (lib/linear/cv-parser.ts:64:11)
+
+    at async submitApplication (lib/actions/application.ts:75:24
+```
+
+Threw this error back at the chat, see if it can fix it. The issue is that in NextJS, we need to mark packages that depend on spawning workers as external. It tried adding Webpack config to solve this, but of course, this is NextJS 16, so Turbopack is enabled by default. I was pleasantly surprised when instead of downgrading NextJS, like a lot of other tools would do, it managed to port the config to Turbopack instantly.

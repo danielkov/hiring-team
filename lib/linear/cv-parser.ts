@@ -78,8 +78,15 @@ async function parsePDF(buffer: Buffer): Promise<string> {
     // Convert Buffer to Uint8Array for pdf-parse
     const uint8Array = new Uint8Array(buffer);
     
+    // Configure worker path for Next.js environment
+    // Set worker to empty string to use the default bundled worker
+    PDFParse.setWorker('');
+    
     // Create PDFParse instance with the buffer data
-    const pdfParse = new PDFParse({ data: uint8Array });
+    const pdfParse = new PDFParse({ 
+      data: uint8Array,
+      verbosity: 0 // Suppress verbose logging
+    });
     
     // Extract text from the PDF
     const result = await pdfParse.getText();
