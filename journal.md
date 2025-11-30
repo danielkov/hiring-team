@@ -268,3 +268,27 @@ I decided to use Cerebras for inference, since I couldn't figure out what Liquid
 I knew that Kiro refusing to use the internet would seriously hurt this part, since a lot of these APIs and SDKs are only weeks old. The models won't have that "knowledge" yet, so it would just hallucinate endlessly. I hand-coded an example, that improves job descriptions. This covers all of the API surface required for the rest of the text inference features. Interested to see if Kiro's able to pick up on this.
 
 My plan also seriously diverged from what's in `tasks.md`. I decided to vibe code (because I trust this mode more vs plan mode) one end-to-end example and then prompt spec mode to update the spec, based on the existing working implementation.
+
+Vibe coding implemented the AI enhanced job description feature, with a critical flaw: I instructed it to remove the `enhance` label and place `ai-generated` label on the project instead. Unfortunately, Kiro implemented this in two steps. This meant that after each update, we'd get a new webhook event, which causes a new update, which causes a new webhook event, and so on, until infinity. I actually anticipated this, as it's a typical beginner mistake. I would've expected Kiro to catch this before self-DDoSing.
+
+I added the following prompt to the vibe code session:
+
+```
+There's a critical error in your implementation: content update and label update needs to happen in the same request, otherwise, you trigger an infinite chain of update -> webhook -> update events. Move the logic that ensures label creation to above the update SDK call. Then update both content and labels in one call.
+```
+
+It sort of fixed it. Weirdly, the code it produced to fix this issue wasn't great, in terms of form, e.g.: early return opportunities were ignored, etc. This is a regression compared to prior code. I wonder if the fact that I gave it such detailed instructions, made it pick a cheaper model for this task?
+
+A flaw in Kiro's implementation is that it used `client.issueLabels`, attempting to get project labels. Anyone reasonable would assume, that issue labels aren't compatible with projects. The Linear SDK also offers a `client.projectLabels` method. Could you guess what this does? Kiro couldn't. I pasted the failure from the console into the vibe coding session. Here's a snippet of the raw SDK error:
+
+```
+Error: Entity not found in validateAccess: labelIds: {"response":{"errors":[{"message":"Entity not found in validateAccess: labelIds","path":["projectUpdate"],"locations":[{"line":2,"column":3}],"extensions":{"type":"invalid input","code":"INPUT_ERROR","statusCode":400,"userError":true,"userPresentableMessage":"labelIds contained an entry that could not be found."}}],
+```
+
+Kiro came up with the following thought process.
+
+```
+Looks like we're trying to use issue labels for a project. This is wrong. No wait. Linear allows all labels to be used on all entity types. Using issue labels is fine.
+```
+
+It then proceeded to rename the variable `issueLabels` to `workspaceLabels`. This - of course - did nothing. It then decided to revert all of the changes that it made prior, which prevented the infinite loop issue, claiming that it was those changes that caused the failure. In reality, the fix was quite literally replacing `client.issueLabels` with `client.projectLabels`. This is by far the dumbest LLM coding mistake I've seen in the past year.

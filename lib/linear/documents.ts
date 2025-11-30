@@ -5,7 +5,7 @@
  */
 
 import { getLinearClient } from './client';
-import { Document } from '@linear/sdk';
+import { Document, LinearClient } from '@linear/sdk';
 
 const TONE_OF_VOICE_TITLE = 'Tone of Voice Guide';
 const DEFAULT_TONE_OF_VOICE_CONTENT = `# Tone of Voice Guide
@@ -53,11 +53,14 @@ This document defines the communication style and tone for all job descriptions 
 /**
  * Check if a Tone of Voice Document exists in the given Initiative
  */
-export async function checkToneOfVoiceDocument(initiativeId: string): Promise<Document | null> {
-  const client = await getLinearClient();
+export async function checkToneOfVoiceDocument(
+  initiativeId: string,
+  client?: LinearClient
+): Promise<Document | null> {
+  const linearClient = client || await getLinearClient();
   
   // Fetch the Initiative with its documents
-  const initiative = await client.initiative(initiativeId);
+  const initiative = await linearClient.initiative(initiativeId);
   
   if (!initiative) {
     throw new Error('Initiative not found');
@@ -120,8 +123,11 @@ export async function ensureToneOfVoiceDocument(initiativeId: string): Promise<D
 /**
  * Get the Tone of Voice Document content for an Initiative
  */
-export async function getToneOfVoiceContent(initiativeId: string): Promise<string> {
-  const doc = await checkToneOfVoiceDocument(initiativeId);
+export async function getToneOfVoiceContent(
+  initiativeId: string,
+  client?: LinearClient
+): Promise<string> {
+  const doc = await checkToneOfVoiceDocument(initiativeId, client);
   
   if (!doc) {
     throw new Error('Tone of Voice Document not found');

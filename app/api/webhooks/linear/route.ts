@@ -7,6 +7,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { config } from '@/lib/config';
 import crypto from 'crypto';
+import { getOrgConfig } from '@/lib/redis';
+import { createLinearClient } from '@/lib/linear/client';
+import { getToneOfVoiceContent } from '@/lib/linear/documents';
+import { enhanceJobDescription } from '@/lib/cerebras/job-description';
 
 /**
  * Verify webhook signature using HMAC
@@ -39,28 +43,131 @@ function isReplayAttack(timestamp: string): boolean {
 }
 
 /**
- * Handle Project status change events
+ * Handle Project creation or update events
+ * Checks for 'enhance' label and triggers AI job description enhancement
  */
-async function handleProjectStatusChange(event: any): Promise<void> {
-  console.log('Project status changed:', {
-    projectId: event.data?.id,
-    newStatus: event.data?.state?.name,
-  });
+async function handleProjectChange(event: any): Promise<void> {
+  const projectId = event.data?.id;
   
-  // TODO: Implement cache invalidation and AI generation trigger
-  // This will be implemented in task 5 (AI job description generation)
-}
+  if (!projectId) {
+    console.error('Missing project ID in webhook event');
+    return;
+  }
 
-/**
- * Handle Project description update events
- */
-async function handleProjectDescriptionUpdate(event: any): Promise<void> {
-  console.log('Project description updated:', {
-    projectId: event.data?.id,
+  console.log('Project changed:', {
+    projectId,
+    action: event.action,
   });
-  
-  // TODO: Implement cache invalidation
-  // This will trigger job board refresh
+
+  try {
+    // Linear webhooks include the organization URL key which is the org name
+    // The URL is in format: https://linear.app/{orgUrlKey}/...
+    const orgUrlKey = event.url?.split('/')[3];
+    
+    if (!orgUrlKey) {
+      console.error('Could not extract organization URL key from webhook event');
+      return;
+    }
+
+    // Get organization config from Redis using org URL key (which is the org name)
+    const orgConfig = await getOrgConfig(orgUrlKey);
+    
+    if (!orgConfig) {
+      console.error('Organization config not found in Redis:', orgUrlKey);
+      return;
+    }
+
+    // Create Linear client with org access token
+    const client = createLinearClient(orgConfig.accessToken);
+    
+    // Fetch the project
+    const project = await client.project(projectId);
+    
+    if (!project) {
+      console.error('Project not found:', projectId);
+      return;
+    }
+
+    // Get project labels
+    const labels = await project.labels();
+    const hasEnhanceLabel = labels.nodes.some(label => label.name === 'enhance');
+    
+    if (!hasEnhanceLabel) {
+      console.log('Project does not have "enhance" label, skipping enhancement');
+      return;
+    }
+
+    console.log('Project has "enhance" label, starting enhancement process');
+
+    // Get the original content
+    const originalContent = project.content || '';
+    
+    if (!originalContent) {
+      console.error('Project has no content to enhance');
+      return;
+    }
+
+    // Get the initiative to load tone of voice document
+    const initiatives = await project.initiatives();
+    const initiative = initiatives.nodes.find(
+      init => init.id === orgConfig.atsContainerInitiativeId
+    );
+
+    if (!initiative) {
+      console.error('Project does not belong to ATS Container Initiative');
+      return;
+    }
+
+    // Get tone of voice content
+    const toneOfVoice = await getToneOfVoiceContent(initiative.id, client);
+
+    // Enhance the job description
+    console.log('Calling AI enhancement...');
+    const enhancedContent = await enhanceJobDescription(originalContent, toneOfVoice);
+
+    if (!enhancedContent) {
+      console.error('AI enhancement returned no content');
+      return;
+    }
+
+    console.log('AI enhancement completed, preparing to update project');
+
+    // Get current label IDs (excluding 'enhance')
+    const currentLabelIds = labels.nodes
+      .filter(label => label.name !== 'enhance')
+      .map(label => label.id);
+
+    // Get or create 'ai-generated' label BEFORE updating the project
+    const workspaceLabels = await client.projectLabels();
+    let aiGeneratedLabel = workspaceLabels.nodes.find(
+      label => label.name === 'ai-generated'
+    );
+
+    // Create the label if it doesn't exist
+    if (!aiGeneratedLabel) {
+      const createResult = await client.createProjectLabel({
+        name: 'ai-generated',
+        color: '#5E6AD2', // Linear purple
+      });
+      
+      if (createResult.success && createResult.projectLabel) {
+        aiGeneratedLabel = await createResult.projectLabel;
+      }
+    }
+
+    // Update project content AND labels in a single call to avoid triggering another webhook
+    if (aiGeneratedLabel) {
+      await client.updateProject(projectId, {
+        content: enhancedContent,
+        labelIds: [...currentLabelIds, aiGeneratedLabel.id],
+      });
+      console.log('Project enhancement completed successfully');
+    } else {
+      console.error('Failed to get or create ai-generated label');
+    }
+  } catch (error) {
+    console.error('Error handling project change:', error);
+  }
 }
 
 /**
@@ -85,10 +192,8 @@ async function routeWebhookEvent(event: any): Promise<void> {
   
   switch (eventType) {
     case 'Project':
-      if (action === 'update' && event.data?.state) {
-        await handleProjectStatusChange(event);
-      } else if (action === 'update' && event.data?.description) {
-        await handleProjectDescriptionUpdate(event);
+      if (action === 'create' || action === 'update') {
+        await handleProjectChange(event);
       }
       break;
       
@@ -115,21 +220,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     
     // Get signature from headers
     const signature = request.headers.get('linear-signature');
-    const timestamp = request.headers.get('linear-timestamp');
     
-    if (!signature || !timestamp) {
+    if (!signature) {
       console.error('Missing webhook signature or timestamp');
       return NextResponse.json(
         { error: 'Missing signature or timestamp' },
-        { status: 401 }
-      );
-    }
-    
-    // Check for replay attacks
-    if (isReplayAttack(timestamp)) {
-      console.error('Webhook replay attack detected');
-      return NextResponse.json(
-        { error: 'Webhook timestamp too old' },
         { status: 401 }
       );
     }
