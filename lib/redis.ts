@@ -35,14 +35,57 @@ export async function storeOrgConfig(orgName: string, config: LinearOrgConfig): 
 
 /**
  * Get Linear organization configuration from Redis
+ * Automatically refreshes the access token if it's expired or close to expiry
  */
 export async function getOrgConfig(orgName: string): Promise<LinearOrgConfig | null> {
   console.log('[getOrgConfig] Starting for org:', orgName);
   const key = `linear:org:${orgName}:config`;
   console.log('[getOrgConfig] About to call redis.get with key:', key);
-  const res = await redis.get<LinearOrgConfig>(key)
-  console.log('[getOrgConfig] redis.get returned:', res ? 'config found' : 'null');
-  return res;
+  const config = await redis.get<LinearOrgConfig>(key);
+  console.log('[getOrgConfig] redis.get returned:', config ? 'config found' : 'null');
+  
+  if (!config) {
+    return null;
+  }
+
+  // Check if token is expired or close to expiry (within 5 minutes)
+  const now = Date.now();
+  const bufferTime = 5 * 60 * 1000; // 5 minutes in milliseconds
+  const isExpiredOrCloseToExpiry = config.expiresAt <= now + bufferTime;
+
+  if (isExpiredOrCloseToExpiry) {
+    console.log('[getOrgConfig] Token expired or close to expiry, attempting refresh');
+    try {
+      // Import refreshLinearToken dynamically to avoid circular dependencies
+      const { refreshLinearToken } = await import('./linear/oauth');
+      
+      const refreshedTokens = await refreshLinearToken(config.refreshToken);
+      
+      // Calculate new expiry timestamp
+      const newExpiresAt = Date.now() + refreshedTokens.expiresIn * 1000;
+      
+      // Update config with new tokens
+      const updatedConfig: LinearOrgConfig = {
+        ...config,
+        accessToken: refreshedTokens.accessToken,
+        refreshToken: refreshedTokens.refreshToken,
+        expiresAt: newExpiresAt,
+      };
+      
+      // Store updated config in Redis
+      await storeOrgConfig(orgName, updatedConfig);
+      console.log('[getOrgConfig] Token refreshed and stored successfully');
+      
+      return updatedConfig;
+    } catch (error) {
+      console.error('[getOrgConfig] Failed to refresh token:', error);
+      // Return the existing config even if refresh fails
+      // The calling code can handle the expired token error
+      return config;
+    }
+  }
+
+  return config;
 }
 
 /**
