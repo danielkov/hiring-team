@@ -8,6 +8,7 @@ import { Feature73 } from '@/components/feature73';
 import { Integration3 } from '@/components/integration3';
 import { Cta10 } from '@/components/cta10';
 import { Pricing4 } from '@/components/pricing4';
+import { getPricingTiers } from '@/lib/actions/products';
 
 export default async function HomePage() {
   // Retrieves the user from the session or returns `null` if no user is signed in
@@ -20,6 +21,9 @@ export default async function HomePage() {
   // Get the URL to redirect the user to AuthKit to sign up
   const signUpUrl = await getSignUpUrl();
   const signInUrl = await getSignInUrl();
+  
+  // Fetch pricing from Polar
+  const pricingTiers = await getPricingTiers();
 
   return (
     <main className='flex flex-col items-center'>
@@ -93,7 +97,7 @@ export default async function HomePage() {
         }}
       />
       <div id="pricing">
-        <Pricing4 />
+        <Pricing4 pricingTiers={pricingTiers} />
       </div>
       <div id="integrations">
         <Integration3 />

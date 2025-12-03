@@ -19,22 +19,49 @@ interface PricingPlan {
   isPopular?: boolean;
 }
 
+interface PricingTiers {
+  free: {
+    name: string;
+    description: string;
+    monthlyPrice: string;
+    yearlyPrice: string;
+  };
+  pro: {
+    name: string;
+    description: string;
+    monthlyPrice: string;
+    yearlyPrice: string;
+  };
+  enterprise: {
+    name: string;
+    description: string;
+    monthlyPrice: string;
+    yearlyPrice: string;
+  };
+}
+
 interface Pricing4Props {
   title?: string;
   description?: string;
   plans?: PricingPlan[];
+  pricingTiers?: PricingTiers;
   className?: string;
 }
 
 const Pricing4 = ({
   title = "Simple, Transparent Pricing",
   description = "Start free and scale as you grow. No hidden fees, no surprises.",
-  plans = [
+  plans,
+  pricingTiers,
+  className = "",
+}: Pricing4Props) => {
+  // Use dynamic pricing if provided, otherwise fall back to default plans
+  const defaultPlans = [
     {
-      name: "Starter",
+      name: pricingTiers?.free.name || "Starter",
       badge: "Free",
-      monthlyPrice: "$0",
-      yearlyPrice: "$0",
+      monthlyPrice: pricingTiers?.free.monthlyPrice || "$0",
+      yearlyPrice: pricingTiers?.free.yearlyPrice || "$0",
       features: [
         "Up to 3 active job listings",
         "AI job description generation",
@@ -45,10 +72,10 @@ const Pricing4 = ({
       buttonText: "Get Started",
     },
     {
-      name: "Professional",
+      name: pricingTiers?.pro.name || "Professional",
       badge: "Pro",
-      monthlyPrice: "$99",
-      yearlyPrice: "$999",
+      monthlyPrice: pricingTiers?.pro.monthlyPrice || "$99",
+      yearlyPrice: pricingTiers?.pro.yearlyPrice || "$999",
       features: [
         "Unlimited job listings",
         "Advanced AI screening",
@@ -61,10 +88,10 @@ const Pricing4 = ({
       isPopular: true,
     },
     {
-      name: "Enterprise",
-      badge: "Custom",
-      monthlyPrice: "Custom",
-      yearlyPrice: "Custom",
+      name: pricingTiers?.enterprise.name || "Enterprise",
+      badge: "Enterprise",
+      monthlyPrice: pricingTiers?.enterprise.monthlyPrice || "Custom",
+      yearlyPrice: pricingTiers?.enterprise.yearlyPrice || "Custom",
       features: [
         "Everything in Pro",
         "Dedicated account manager",
@@ -75,9 +102,9 @@ const Pricing4 = ({
       ],
       buttonText: "Contact Sales",
     },
-  ],
-  className = "",
-}: Pricing4Props) => {
+  ];
+  
+  const displayPlans = plans || defaultPlans;
   const [isAnnually, setIsAnnually] = useState(false);
   return (
     <section className={`py-32 ${className}`}>
@@ -128,7 +155,7 @@ const Pricing4 = ({
             </div>
           </div>
           <div className="flex w-full flex-col items-stretch gap-6 md:flex-row">
-            {plans.map((plan) => (
+            {displayPlans.map((plan) => (
               <div
                 key={plan.name}
                 className={`flex w-full flex-col rounded-lg border p-6 text-left ${

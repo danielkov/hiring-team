@@ -28,6 +28,7 @@ export const config = {
   polar: {
     accessToken: process.env.POLAR_ACCESS_TOKEN || '',
     webhookSecret: process.env.POLAR_WEBHOOK_SECRET || '',
+    organizationId: process.env.POLAR_ORGANIZATION_ID || '',
     products: {
       free: process.env.POLAR_FREE_PRODUCT_ID || '',
       pro: process.env.POLAR_PRO_PRODUCT_ID || '',

@@ -229,6 +229,66 @@ export async function listCustomerMeters(organizationId: string) {
 }
 
 /**
+ * List products from Polar
+ * Returns all products with their pricing information
+ * 
+ * Requirements: 6.1
+ * 
+ * @param organizationId - Optional Polar organization ID to filter products
+ * @returns Array of products with pricing details
+ * @throws Error if API call fails after retries
+ */
+export async function listProducts(organizationId?: string) {
+  const startTime = Date.now();
+  
+  try {
+    logger.info('Fetching products from Polar', {
+      organizationId,
+    });
+
+    const resultIterator = await withRetry(
+      async () => {
+        const client = getPolarClient();
+        return await client.products.list({
+          organizationId,
+          isArchived: false,
+        });
+      },
+      {
+        maxAttempts: 3,
+        initialDelayMs: 1000,
+        shouldRetry: isRetryableError,
+      }
+    );
+
+    // Collect all pages into an array
+    const products = [];
+    for await (const page of resultIterator) {
+      products.push(...page.result.items);
+    }
+
+    const latency = Date.now() - startTime;
+    
+    logger.info('Successfully fetched products', {
+      organizationId,
+      productCount: products.length,
+      latencyMs: latency,
+    });
+
+    return products;
+  } catch (error) {
+    const latency = Date.now() - startTime;
+    
+    logger.error('Failed to fetch products from Polar', error as Error, {
+      organizationId,
+      latencyMs: latency,
+    });
+
+    throw error;
+  }
+}
+
+/**
  * Create a Polar checkout session for subscription purchase
  * Redirects user to Polar's hosted checkout page
  * 

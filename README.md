@@ -23,6 +23,8 @@ An Applicant Tracking System that uses Linear as its source of truth, with AI-po
 - **AI Pre-screening**: Automatic candidate evaluation comparing CVs against job requirements
 - **Document Parsing**: Extract text from PDF and DOCX files for AI analysis
 - **Webhook Integration**: Real-time sync with Linear via webhooks
+- **Subscription Management**: Polar.sh integration for usage-based billing and subscription tiers
+- **Dynamic Pricing**: Landing page pricing automatically loads from Polar API
 - **Full Observability**: Comprehensive monitoring with Datadog APM, metrics, and logging
 
 ## Getting Started
@@ -56,6 +58,7 @@ An Applicant Tracking System that uses Linear as its source of truth, with AI-po
    - **Linear**: OAuth client ID, secret, and webhook secret
    - **Cerebras**: API key for AI inference
    - **Upstash Redis**: Connection URL and token
+   - **Polar**: Access token, webhook secret, organization ID, and product IDs
    - **Datadog**: API key and service configuration (optional)
 
 ### Development
