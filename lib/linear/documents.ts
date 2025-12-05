@@ -44,10 +44,6 @@ This document defines the communication style and tone for all job descriptions 
 
 **Instead of**: "Fast-paced environment"
 **Use**: "We work collaboratively to meet ambitious goals while maintaining work-life balance"
-
----
-
-*This guide should be customized to reflect your organization's unique voice and culture.*
 `;
 
 /**
@@ -134,4 +130,12 @@ export async function getToneOfVoiceContent(
   }
   
   return doc.content || '';
+}
+
+/**
+ * Get the default Tone of Voice content
+ * Returns the default tone of voice template without fetching from Linear
+ */
+export function getDefaultToneOfVoiceContent(): string {
+  return DEFAULT_TONE_OF_VOICE_CONTENT;
 }

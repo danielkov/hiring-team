@@ -38,6 +38,9 @@ export const config = {
       jobDescriptions: process.env.POLAR_JOB_DESCRIPTIONS_METER_ID || '',
       candidateScreenings: process.env.POLAR_CANDIDATE_SCREENINGS_METER_ID || '',
     },
+    benefits: {
+      customToneOfVoice: process.env.POLAR_CUSTOM_TONE_OF_VOICE_BENEFIT_ID || '',
+    },
   },
   app: {
     url: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',

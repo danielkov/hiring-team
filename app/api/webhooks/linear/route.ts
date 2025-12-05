@@ -132,8 +132,30 @@ async function handleProjectChange(event: any): Promise<void> {
       return;
     }
 
-    // Get tone of voice content
-    const toneOfVoice = await getToneOfVoiceContent(initiative.id, client);
+    // Get tone of voice content - check if org has custom tone of voice benefit
+    const { hasBenefit } = await import('@/lib/polar/subscription');
+    const { config } = await import('@/lib/config');
+    const { getDefaultToneOfVoiceContent } = await import('@/lib/linear/documents');
+    
+    let toneOfVoice: string;
+    const hasCustomToneOfVoiceBenefit = await hasBenefit(
+      orgConfig.orgId,
+      config.polar.benefits.customToneOfVoice
+    );
+    
+    if (hasCustomToneOfVoiceBenefit) {
+      logger.info('Organization has custom tone of voice benefit, fetching from Linear', {
+        projectId,
+        orgId: orgConfig.orgId,
+      });
+      toneOfVoice = await getToneOfVoiceContent(initiative.id, client);
+    } else {
+      logger.info('Organization does not have custom tone of voice benefit, using default', {
+        projectId,
+        orgId: orgConfig.orgId,
+      });
+      toneOfVoice = getDefaultToneOfVoiceContent();
+    }
 
     // Enhance the job description with retry logic
     logger.info('Calling AI enhancement', { projectId });

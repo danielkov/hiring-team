@@ -406,3 +406,59 @@ export async function cancelSubscription(linearOrgId: string): Promise<void> {
     throw error;
   }
 }
+
+/**
+ * Check if organization has a specific benefit in their subscription
+ * Requirements: Custom tone of voice feature gating
+ * 
+ * @param linearOrgId - Linear organization ID
+ * @param benefitId - Polar benefit ID to check for
+ * @returns True if the organization has the benefit, false otherwise
+ */
+export async function hasBenefit(
+  linearOrgId: string,
+  benefitId: string
+): Promise<boolean> {
+  try {
+    logger.info('Checking if organization has benefit', {
+      linearOrgId,
+      benefitId,
+    });
+
+    // Import here to avoid circular dependency
+    const { getCustomerState } = await import('./client');
+    
+    // Get customer state from Polar
+    const customerState = await getCustomerState(linearOrgId);
+    
+    if (!customerState) {
+      logger.info('No customer state found, benefit not available', {
+        linearOrgId,
+        benefitId,
+      });
+      return false;
+    }
+    
+    // Check if the benefit is in the granted benefits list
+    const hasActiveBenefit = customerState.grantedBenefits?.some(
+      (grant) => grant.benefitId === benefitId
+    ) ?? false;
+    
+    logger.info('Benefit check completed', {
+      linearOrgId,
+      benefitId,
+      hasActiveBenefit,
+      grantedBenefitCount: customerState.grantedBenefits?.length || 0,
+    });
+    
+    return hasActiveBenefit;
+  } catch (error) {
+    logger.error('Failed to check benefit', error as Error, {
+      linearOrgId,
+      benefitId,
+    });
+    
+    // Return false on error to gracefully degrade to default behavior
+    return false;
+  }
+}
