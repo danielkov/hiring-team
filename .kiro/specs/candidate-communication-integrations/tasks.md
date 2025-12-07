@@ -64,8 +64,8 @@
   - **Property 22: Benefit check failure handling**
   - **Validates: Requirements 9.1, 9.2, 9.3, 9.4**
 
-- [ ] 4. Implement confirmation email on application submission
-- [ ] 4.1 Update state machine to send confirmation email
+- [x] 4. Implement confirmation email on application submission
+- [x] 4.1 Update state machine to send confirmation email
   - Modify `lib/linear/state-machine.ts` to check email communication benefit when "New" label is added
   - Send confirmation email after issue creation
   - Generate dynamic reply-to address with org and issue ID

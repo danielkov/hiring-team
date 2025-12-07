@@ -14,8 +14,12 @@ import {
   addIssueComment 
 } from './state-management';
 import { checkMeterBalance } from '@/lib/polar/usage-meters';
+import { checkEmailCommunicationBenefit } from '@/lib/polar/benefits';
+import { sendConfirmationEmail } from '@/lib/resend/templates';
+import { generateReplyToAddress } from '@/lib/resend/email-threading';
 import { withRetry, isRetryableError } from '../utils/retry';
 import { logger } from '@/lib/datadog/logger';
+import { Issue, Project } from '@linear/sdk';
 
 /**
  * State machine labels
@@ -83,16 +87,141 @@ export async function handleIssueUpdate(
   
   // State machine transitions
   
-  // Transition 1: New → Process CV/Cover Letter
+  // Transition 0: New → Send Confirmation Email (if benefit exists)
+  // This happens before document processing
   if (stateName === STATE_STATUSES.TODO && labelNames.includes(STATE_LABELS.NEW)) {
-    await processDocuments(client, issue, linearOrgId, linearAccessToken);
+    await sendConfirmationEmailIfEnabled(issue, project, linearOrgId, linearAccessToken);
+    await processDocuments(client, issue);
     return;
   }
   
-  // Transition 2: Processed → Run Screening
+  // Transition 1: Processed → Run Screening
   if (stateName === STATE_STATUSES.TODO && labelNames.includes(STATE_LABELS.PROCESSED)) {
     await runScreening(client, issue, project, linearOrgId, linearAccessToken);
     return;
+  }
+}
+
+/**
+ * Send confirmation email if organization has email communication benefit
+ * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5
+ */
+async function sendConfirmationEmailIfEnabled(
+  issue: Issue,
+  project: Project,
+  linearOrgId: string,
+  linearAccessToken: string
+): Promise<void> {
+  try {
+    logger.info('Checking email communication benefit for confirmation email', { 
+      issueId: issue.id,
+      linearOrgId,
+    });
+    
+    // Check if organization has email communication benefit
+    const hasEmailBenefit = await checkEmailCommunicationBenefit(linearOrgId);
+    
+    if (!hasEmailBenefit) {
+      logger.info('Organization does not have email communication benefit, skipping confirmation email', {
+        issueId: issue.id,
+        linearOrgId,
+      });
+      return;
+    }
+    
+    // Extract candidate information from issue description
+    const candidateInfo = extractCandidateInfo(issue.description || '');
+    
+    if (!candidateInfo) {
+      logger.error('Could not extract candidate info from issue, skipping confirmation email', undefined, {
+        issueId: issue.id,
+      });
+      return;
+    }
+    
+    // Get position title from project
+    const positionTitle = project.name || 'Position';
+    
+    // Get organization name from Linear org
+    const team = await issue.team;
+    if (!team) {
+      logger.error('Issue team not found', undefined, { issueId: issue.id });
+      return;
+    }
+    const organization = await team.organization;
+    const organizationName = organization?.name || 'Our Team';
+    
+    // Generate dynamic reply-to address
+    const replyToAddress = generateReplyToAddress(linearOrgId, issue.id);
+    
+    logger.info('Sending confirmation email', {
+      issueId: issue.id,
+      candidateEmail: candidateInfo.email,
+      candidateName: candidateInfo.name,
+      positionTitle,
+      organizationName,
+      replyToAddress,
+    });
+    
+    // Send confirmation email
+    try {
+      const emailResult = await sendConfirmationEmail({
+        to: candidateInfo.email,
+        candidateName: candidateInfo.name,
+        organizationName,
+        positionTitle,
+        replyTo: replyToAddress,
+      });
+      
+      logger.info('Confirmation email sent successfully', {
+        issueId: issue.id,
+        emailId: emailResult?.id,
+        candidateEmail: candidateInfo.email,
+      });
+      
+      // Add comment to Linear Issue documenting the email sent
+      // Include Message-ID for future threading
+      const messageId = emailResult?.id || 'unknown';
+      const commentBody = `*Confirmation email sent to ${candidateInfo.email}*\n\nReplies to this email will be added as comments to this issue.\n\n---\n\nMessage-ID: ${messageId}`;
+      
+      await addIssueComment(
+        linearAccessToken,
+        issue.id,
+        commentBody
+      );
+      
+      logger.info('Added confirmation email comment to issue', {
+        issueId: issue.id,
+        messageId,
+      });
+    } catch (emailError) {
+      // Handle email sending failures gracefully - log but don't throw
+      // Application processing should continue even if email fails
+      logger.error('Failed to send confirmation email', emailError instanceof Error ? emailError : new Error(String(emailError)), {
+        issueId: issue.id,
+        candidateEmail: candidateInfo.email,
+        positionTitle,
+      });
+      
+      // Add comment noting the failure
+      try {
+        await addIssueComment(
+          linearAccessToken,
+          issue.id,
+          `*Failed to send confirmation email to ${candidateInfo.email}. Error: ${emailError instanceof Error ? emailError.message : 'Unknown error'}*`
+        );
+      } catch (commentError) {
+        logger.error('Failed to add email failure comment', commentError instanceof Error ? commentError : new Error(String(commentError)), {
+          issueId: issue.id,
+        });
+      }
+    }
+  } catch (error) {
+    // Log error but don't throw - we don't want to block application processing
+    logger.error('Error in sendConfirmationEmailIfEnabled', error instanceof Error ? error : new Error(String(error)), {
+      issueId: issue.id,
+      linearOrgId,
+    });
   }
 }
 
@@ -103,9 +232,7 @@ export async function handleIssueUpdate(
  */
 async function processDocuments(
   client: ReturnType<typeof createLinearClient>,
-  issue: any,
-  _linearOrgId: string,
-  _linearAccessToken: string
+  issue: Issue,
 ): Promise<void> {
   try {
     logger.info('Processing documents for issue', { issueId: issue.id });
@@ -114,11 +241,11 @@ async function processDocuments(
     const attachments = await issue.attachments();
     
     // Find CV and cover letter attachments
-    const cvAttachment = attachments?.nodes.find((a: any) => 
+    const cvAttachment = attachments?.nodes.find((a) => 
       a.title?.toLowerCase().includes('cv') || a.title?.toLowerCase().includes('resume')
     );
     
-    const coverLetterAttachment = attachments?.nodes.find((a: any) => 
+    const coverLetterAttachment = attachments?.nodes.find((a) => 
       a.title?.toLowerCase().includes('cover letter')
     );
     
@@ -171,8 +298,8 @@ async function processDocuments(
     // Get current labels and prepare new label set
     const labels = await issue.labels();
     const currentLabelIds = labels.nodes
-      .filter((l: any) => l.name !== STATE_LABELS.NEW)
-      .map((l: any) => l.id);
+      .filter((l) => l.name !== STATE_LABELS.NEW)
+      .map((l) => l.id);
     
     // Ensure "Processed" label exists
     const processedLabelId = await ensureLabel(client, STATE_LABELS.PROCESSED);
@@ -198,8 +325,8 @@ async function processDocuments(
  */
 async function runScreening(
   client: ReturnType<typeof createLinearClient>,
-  issue: any,
-  project: any,
+  issue: Issue,
+  project: Project,
   linearOrgId: string,
   linearAccessToken: string
 ): Promise<void> {
@@ -218,8 +345,12 @@ async function runScreening(
       
       // Get team and find Triage state
       const team = await issue.team;
+      if (!team) {
+        logger.error('Issue team not found', undefined, { issueId: issue.id });
+        return;
+      }
       const states = await team.states();
-      const triageState = states.nodes.find((s: any) => s.name === STATE_STATUSES.TRIAGE);
+      const triageState = states.nodes.find((s) => s.name === STATE_STATUSES.TRIAGE);
       
       if (!triageState) {
         logger.error('Triage state not found', undefined, { issueId: issue.id });
@@ -229,8 +360,8 @@ async function runScreening(
       // Get current labels and prepare new label set
       const labels = await issue.labels();
       const currentLabelIds = labels.nodes
-        .filter((l: any) => l.name !== STATE_LABELS.PROCESSED)
-        .map((l: any) => l.id);
+        .filter((l) => l.name !== STATE_LABELS.PROCESSED)
+        .map((l) => l.id);
       
       // Ensure "Pre-screened" label exists
       const prescreenedLabelId = await ensureLabel(client, STATE_LABELS.PRE_SCREENED);
@@ -264,8 +395,12 @@ async function runScreening(
       
       // Get team and find Triage state
       const team = await issue.team;
+      if (!team) {
+        logger.error('Issue team not found', undefined, { issueId: issue.id });
+        return;
+      }
       const states = await team.states();
-      const triageState = states.nodes.find((s: any) => s.name === STATE_STATUSES.TRIAGE);
+      const triageState = states.nodes.find((s) => s.name === STATE_STATUSES.TRIAGE);
       
       if (triageState) {
         // SINGLE UPDATE: Just update state
@@ -310,8 +445,12 @@ async function runScreening(
     
     // Get team and find target state
     const team = await issue.team;
+    if (!team) {
+      logger.error('Issue team not found', undefined, { issueId: issue.id });
+      return;
+    }
     const states = await team.states();
-    const targetStateObj = states.nodes.find((s: any) => s.name === newStatusName);
+    const targetStateObj = states.nodes.find((s) => s.name === newStatusName);
     
     if (!targetStateObj) {
       logger.error('Target state not found', undefined, { issueId: issue.id, newStatusName });
@@ -321,8 +460,8 @@ async function runScreening(
     // Get current labels and prepare new label set
     const labels = await issue.labels();
     const currentLabelIds = labels.nodes
-      .filter((l: any) => l.name !== STATE_LABELS.PROCESSED)
-      .map((l: any) => l.id);
+      .filter((l) => l.name !== STATE_LABELS.PROCESSED)
+      .map((l) => l.id);
     
     // Ensure "Pre-screened" label exists
     const prescreenedLabelId = await ensureLabel(client, STATE_LABELS.PRE_SCREENED);
@@ -346,8 +485,12 @@ async function runScreening(
     // Move to Triage on error
     try {
       const team = await issue.team;
+      if (!team) {
+        logger.error('Issue team not found', undefined, { issueId: issue.id });
+        return;
+      }
       const states = await team.states();
-      const triageState = states.nodes.find((s: any) => s.name === STATE_STATUSES.TRIAGE);
+      const triageState = states.nodes.find((s) => s.name === STATE_STATUSES.TRIAGE);
       
       if (triageState) {
         // SINGLE UPDATE: Just update state
@@ -374,7 +517,7 @@ async function ensureLabel(
   try {
     // Get or create the label
     const issueLabels = await client.issueLabels();
-    let label = issueLabels.nodes.find((l: any) => l.name === labelName);
+    let label = issueLabels.nodes.find((l) => l.name === labelName);
     
     if (!label) {
       // Create the label if it doesn't exist
@@ -398,5 +541,37 @@ async function ensureLabel(
       labelName,
     });
     throw error;
+  }
+}
+
+/**
+ * Extract candidate information from issue description
+ * Parses the structured description to get name and email
+ */
+function extractCandidateInfo(issueDescription: string): { name: string; email: string } | null {
+  try {
+    // Parse the issue description which has format:
+    // # Candidate Application
+    // **Name:** John Doe
+    // **Email:** john@example.com
+    
+    const nameMatch = issueDescription.match(/\*\*Name:\*\*\s*(.+)/);
+    const emailMatch = issueDescription.match(/\*\*Email:\*\*\s*(.+)/);
+    
+    if (!nameMatch || !emailMatch) {
+      logger.warn('Could not extract candidate info from issue description', {
+        hasNameMatch: !!nameMatch,
+        hasEmailMatch: !!emailMatch,
+      });
+      return null;
+    }
+    
+    return {
+      name: nameMatch[1].trim(),
+      email: emailMatch[1].trim(),
+    };
+  } catch (error) {
+    logger.error('Error extracting candidate info', error instanceof Error ? error : new Error(String(error)));
+    return null;
   }
 }

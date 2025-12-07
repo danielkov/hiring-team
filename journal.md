@@ -516,3 +516,43 @@ There's no reason to have this. None of these features are ever on a user-driven
 I tried to refactor the issue lifecycle to be a state machine, based on issue state and labels, using vibe code mode. What's interesting is that Kiro spat out 5 new markdown documents, but wrote very little code. These documents do not help the project at all, they're like: REFACTORING_SUMMARY.md, STATE_MACHINE_CHECKLIST.md, EMAIL_STATE_MACHINE.md, SINGLE_UPDATE_PATTERN.md, STATE_MACHINE.md. They all contain roughly the same info: my prompt, inflated with AI slop.
 
 > Does Kiro system prompt have some sort of directive that instructs it if the task is too small to produce a bunch of slop to inflate token usage?
+
+I also noticed Kiro started throwing a bunch of `any`s in places where typing is trivial:
+
+```ts
+async function sendConfirmationEmailIfEnabled(
+  issue: any,
+  project: any,
+  linearOrgId: string,
+  linearAccessToken: string
+): Promise<void> {
+```
+
+I updated most of these by hand:
+
+```ts
+async function sendConfirmationEmailIfEnabled(
+  issue: Issue,
+  project: Project,
+  linearOrgId: string,
+  linearAccessToken: string
+): Promise<void> {
+```
+
+stuff like:
+
+```ts
+const currentLabelIds = labels.nodes
+  .filter((l: any) => l.name !== STATE_LABELS.PROCESSED)
+  .map((l: any) => l.id);
+```
+
+where the right solution is literally just:
+
+```ts
+const currentLabelIds = labels.nodes
+  .filter((l) => l.name !== STATE_LABELS.PROCESSED)
+  .map((l) => l.id);
+```
+
+Fixing these uncovered some issues, mainly Kiro not handling optional return types, where `team` could be `undefined`. I fixed these by hand.
