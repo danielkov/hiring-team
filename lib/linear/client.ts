@@ -72,6 +72,7 @@ export async function getLinearClient(): Promise<LinearClient> {
  */
 export function createLinearClient(accessToken: string): LinearClient {
   console.log('[createLinearClient] Creating client with token');
+  
   const client = new LinearClient({
     accessToken,
   });

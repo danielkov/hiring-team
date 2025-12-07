@@ -294,7 +294,19 @@ export async function getPublishedJobsByOrg(linearOrg: string): Promise<JobListi
   console.log('[getPublishedJobsByOrg] createLinearClient returned');
   
   // Fetch the organization
-  const organization = await client.organization;
+  let organization;
+  try {
+    organization = await client.organization;
+    console.log('[getPublishedJobsByOrg] Organization fetched:', organization.name);
+  } catch (error: any) {
+    console.error('[getPublishedJobsByOrg] Failed to fetch organization:', error);
+    console.error('[getPublishedJobsByOrg] Error details:', {
+      message: error.message,
+      type: error.type,
+      errors: error.errors,
+    });
+    throw error;
+  }
   
   // Verify we're accessing the correct organization
   if (organization.name !== linearOrg) {
