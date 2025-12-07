@@ -1,14 +1,15 @@
 /**
- * Email Threading Service Tests
+ * Email Threading Utilities Tests
  * 
- * Tests for email threading utilities including:
+ * Tests for email threading utility functions including:
  * - Reply address generation and parsing
  * - Message-ID extraction
  * - Email content cleaning
  * - Comment formatting
+ * - Thread reference building
  * 
- * Note: These tests focus on utility functions that don't require external services.
- * The sendThreadedEmail function is tested separately with mocked Resend client.
+ * Note: These are pure utility functions that don't require external services.
+ * Email sending is handled by lib/resend/templates.ts
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -18,6 +19,8 @@ import {
   extractMessageIdFromComment,
   cleanEmailContent,
   formatEmailCommentWithMetadata,
+  buildThreadReferences,
+  getLastMessageId,
 } from './email-threading';
 
 // Set up minimal environment for tests
@@ -222,6 +225,131 @@ Line 3`;
       const formatted = formatEmailCommentWithMetadata(body, 'User', 'msg_123');
       expect(formatted).toContain('Line 1\nLine 2\nLine 3');
       expect(formatted).toContain('From: User');
+    });
+  });
+
+  describe('buildThreadReferences', () => {
+    it('should extract all Message-IDs from comments', () => {
+      const comments = [
+        `First message
+
+---
+
+From: User 1
+Message-ID: msg_001`,
+        `Second message
+
+---
+
+From: User 2
+Message-ID: msg_002`,
+        `Third message
+
+---
+
+From: User 3
+Message-ID: msg_003`,
+      ];
+      
+      const references = buildThreadReferences(comments);
+      expect(references).toEqual(['msg_001', 'msg_002', 'msg_003']);
+    });
+
+    it('should skip comments without Message-IDs', () => {
+      const comments = [
+        `Message with ID
+
+---
+
+From: User 1
+Message-ID: msg_001`,
+        'Regular comment without metadata',
+        `Another message with ID
+
+---
+
+From: User 2
+Message-ID: msg_002`,
+      ];
+      
+      const references = buildThreadReferences(comments);
+      expect(references).toEqual(['msg_001', 'msg_002']);
+    });
+
+    it('should return empty array for comments without Message-IDs', () => {
+      const comments = [
+        'Comment 1',
+        'Comment 2',
+        'Comment 3',
+      ];
+      
+      const references = buildThreadReferences(comments);
+      expect(references).toEqual([]);
+    });
+
+    it('should handle empty comments array', () => {
+      const references = buildThreadReferences([]);
+      expect(references).toEqual([]);
+    });
+  });
+
+  describe('getLastMessageId', () => {
+    it('should return the first Message-ID found (newest)', () => {
+      const comments = [
+        `Latest message
+
+---
+
+From: User 3
+Message-ID: msg_003`,
+        `Older message
+
+---
+
+From: User 2
+Message-ID: msg_002`,
+        `Oldest message
+
+---
+
+From: User 1
+Message-ID: msg_001`,
+      ];
+      
+      const lastId = getLastMessageId(comments);
+      expect(lastId).toBe('msg_003');
+    });
+
+    it('should return null if no Message-IDs found', () => {
+      const comments = [
+        'Comment 1',
+        'Comment 2',
+        'Comment 3',
+      ];
+      
+      const lastId = getLastMessageId(comments);
+      expect(lastId).toBeNull();
+    });
+
+    it('should handle empty comments array', () => {
+      const lastId = getLastMessageId([]);
+      expect(lastId).toBeNull();
+    });
+
+    it('should skip comments without Message-IDs until finding one', () => {
+      const comments = [
+        'Recent comment without ID',
+        'Another comment without ID',
+        `Message with ID
+
+---
+
+From: User
+Message-ID: msg_123`,
+      ];
+      
+      const lastId = getLastMessageId(comments);
+      expect(lastId).toBe('msg_123');
     });
   });
 });

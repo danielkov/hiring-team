@@ -466,3 +466,18 @@ const { data, error } = await resend.emails.send({
 ```
 
 This wouldn't even work, since it neglected to use the right params (Resend works with `react-email`). I ended up having to manually implement templating. This is a fairly new feature, but it is well-documented both online and on Context7. Even after multiple tool calls, where the content was right, it seemed like whatever model Kiro was using at the time simply ignored its context and just wrote whatever code it had in its training data instead. This makes me regret spending so much time on planning, since I had to hand-code the majority of the feature anyway.
+
+MASSIVE FAIL: Kiro completely went off script and decided to re-implement old-style defunct resend templating instead of using existing emails like instructed in tasks.md
+
+At this point I was sure this wouldn't be done today. Kiro completely failed twice in a row, even with a rock solid implementation plan. It spit out 3 different resend client initialisation implementations, two separate templating solutions and 3 separate email sending implementations, where one of them I hand-fixed to use templates, but the other two are just useless trash.
+
+Even though we instructed it not to write tests, it sometimes does. It's also very pleased with itself, wasting hundreds of tokens on explaining how great this is, e.g.:
+
+```
+Test Results:
+✅ All 28 unit tests passing ✅ No TypeScript diagnostics ✅ Validates Requirements 2.1, 3.1, 3.2, 3.3
+
+The implementation is ready to be used by webhook handlers and application submission flows!
+```
+
+These unit tests are pretty rudimentary. Truly nothing to write home about.

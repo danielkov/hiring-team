@@ -1,29 +1,20 @@
 /**
- * Email Threading Service
+ * Email Threading Utilities
  * 
- * Manages email threading using email headers and dynamic reply addresses.
- * No database storage required - all metadata is encoded in email addresses and headers.
+ * Provides utility functions for email threading without database storage.
+ * All metadata is encoded in email addresses and headers.
  * 
  * Threading Strategy:
  * 1. Dynamic Reply-To Addresses: Encode Linear org and issue ID in the reply-to email address
  * 2. Email Headers: Use Message-ID, In-Reply-To, and References headers for proper threading
  * 3. Comment Metadata: Store Message-ID in Linear comments for future replies
  * 4. Content Cleaning: Strip reply quotes and formatting before adding to Linear
+ * 
+ * Note: Actual email sending is handled by lib/resend/templates.ts
  */
 
-import { Resend } from 'resend';
 import { config } from '@/lib/config';
 import { logger } from '@/lib/datadog/logger';
-
-// Lazy initialization of Resend client
-let resendClient: Resend | null = null;
-
-function getResendClient(): Resend {
-  if (!resendClient) {
-    resendClient = new Resend(config.resend.apiKey);
-  }
-  return resendClient;
-}
 
 /**
  * Generate a dynamic reply-to address that encodes issue metadata
@@ -197,91 +188,43 @@ export function formatEmailCommentWithMetadata(
 }
 
 /**
- * Parameters for sending threaded emails
- */
-export interface ThreadedEmailParams {
-  to: string;
-  replyTo: string;
-  subject: string;
-  template: {
-    id: string;
-    variables: Record<string, string>;
-  };
-  inReplyTo?: string; // Message-ID of the email being replied to
-  references?: string[]; // Array of Message-IDs in the conversation chain
-  tags?: Array<{ name: string; value: string }>;
-}
-
-/**
- * Email send response
- */
-export interface EmailSendResponse {
-  id: string;
-}
-
-/**
- * Send email with proper threading headers
+ * Build threading references array from comment history
  * 
- * Sends an email using Resend with proper threading headers to maintain
- * conversation context in email clients. Uses In-Reply-To and References
- * headers to link emails in a thread.
+ * Extracts all Message-IDs from Linear Issue comments to build the References
+ * header for email threading. This maintains the full conversation chain.
  * 
- * @param params - Threaded email parameters
- * @returns Email send response with message ID
- * @throws Error if email sending fails
+ * @param comments - Array of Linear Issue comment bodies
+ * @returns Array of Message-IDs in chronological order
  */
-export async function sendThreadedEmail(params: ThreadedEmailParams): Promise<EmailSendResponse> {
-  try {
-    const headers: Record<string, string> = {};
-    
-    // Add threading headers if this is a reply
-    if (params.inReplyTo) {
-      headers['In-Reply-To'] = `<${params.inReplyTo}>`;
+export function buildThreadReferences(comments: string[]): string[] {
+  const messageIds: string[] = [];
+  
+  for (const comment of comments) {
+    const messageId = extractMessageIdFromComment(comment);
+    if (messageId) {
+      messageIds.push(messageId);
     }
-    
-    if (params.references && params.references.length > 0) {
-      // References should be a space-separated list of Message-IDs
-      headers['References'] = params.references.map(id => `<${id}>`).join(' ');
-    }
-    
-    const resend = getResendClient();
-    const { data, error } = await resend.emails.send({
-      from: config.resend.fromEmail,
-      to: params.to,
-      replyTo: params.replyTo,
-      subject: params.subject,
-      react: params.template as any, // Resend SDK expects 'react' for templates
-      headers,
-      tags: params.tags,
-    });
-    
-    if (error) {
-      logger.error('Threaded email send failed', error as Error, {
-        to: params.to,
-        subject: params.subject,
-        templateId: params.template.id,
-        hasInReplyTo: !!params.inReplyTo,
-        referencesCount: params.references?.length || 0,
-      });
-      throw new Error(`Failed to send email: ${error.message}`);
-    }
-    
-    logger.info('Threaded email sent successfully', {
-      emailId: data?.id,
-      to: params.to,
-      subject: params.subject,
-      templateId: params.template.id,
-      hasInReplyTo: !!params.inReplyTo,
-      referencesCount: params.references?.length || 0,
-    });
-    
-    return data as EmailSendResponse;
-  } catch (error) {
-    logger.error('Threaded email send error', error as Error, {
-      to: params.to,
-      subject: params.subject,
-      templateId: params.template.id,
-    });
-    throw error;
   }
+  
+  return messageIds;
+}
+
+/**
+ * Get the last Message-ID from comment history
+ * 
+ * Finds the most recent Message-ID from Linear Issue comments to use
+ * as the In-Reply-To header for the next email in the thread.
+ * 
+ * @param comments - Array of Linear Issue comment bodies (newest first)
+ * @returns Most recent Message-ID or null if none found
+ */
+export function getLastMessageId(comments: string[]): string | null {
+  for (const comment of comments) {
+    const messageId = extractMessageIdFromComment(comment);
+    if (messageId) {
+      return messageId;
+    }
+  }
+  
+  return null;
 }
