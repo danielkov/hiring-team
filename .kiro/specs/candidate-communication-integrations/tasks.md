@@ -133,13 +133,13 @@
   - **Property 11: Rejection email idempotence**
   - **Validates: Requirements 4.1, 4.5**
 
-- [ ] 9. Set up ElevenLabs integration
-- [ ] 9.1 Install ElevenLabs SDK and configure environment
+- [x] 9. Set up ElevenLabs integration
+- [x] 9.1 Install ElevenLabs SDK and configure environment
   - Add `@elevenlabs/elevenlabs-js` package to dependencies
   - Configure `ELEVENLABS_API_KEY`, `ELEVENLABS_AGENT_ID`, `ELEVENLABS_WEBHOOK_SECRET`
   - _Requirements: 5.1, 6.1, 6.2, 6.3, 6.4, 6.5_
 
-- [ ] 9.2 Configure ElevenLabs agent in dashboard
+- [x] 9.2 Configure ElevenLabs agent in dashboard
   - Create agent with dynamic variables in system prompt: `{{company_name}}`, `{{candidate_name}}`, `{{job_description}}`, `{{job_application}}`, `{{conversation_pointers}}`
   - Configure first message with dynamic variables
   - Set voice and model settings
@@ -147,7 +147,7 @@
   - Publish agent
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
 
-- [ ] 9.3 Create ElevenLabs client service
+- [x] 9.3 Create ElevenLabs client service
   - Implement `lib/elevenlabs/client.ts` with ElevenLabs SDK
   - Implement `createAgentSessionLink()` with base64-encoded variables
   - Implement webhook signature verification

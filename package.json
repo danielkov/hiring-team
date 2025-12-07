@@ -17,6 +17,7 @@
   "dependencies": {
     "@cerebras/cerebras_cloud_sdk": "1.59.0",
     "@datadog/datadog-api-client": "^1.47.0",
+    "@elevenlabs/elevenlabs-js": "2.26.0",
     "@linear/sdk": "^65.1.0",
     "@polar-sh/nextjs": "0.9.0",
     "@polar-sh/sdk": "^0.41.5",

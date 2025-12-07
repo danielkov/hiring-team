@@ -56,6 +56,11 @@ export const config = {
       comment: process.env.RESEND_TEMPLATE_COMMENT || '',
     },
   },
+  elevenlabs: {
+    apiKey: process.env.ELEVENLABS_API_KEY || '',
+    agentId: process.env.ELEVENLABS_AGENT_ID || '',
+    webhookSecret: process.env.ELEVENLABS_WEBHOOK_SECRET || '',
+  },
   app: {
     url: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
     sessionSecret: process.env.SESSION_SECRET || '',
