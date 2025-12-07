@@ -442,19 +442,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ success });
   } catch (error) {
     success = false;
-    errorType = error instanceof Error ? error.name : 'UnknownError';
-    
     const err = error instanceof Error ? error : new Error(String(error));
+    errorType = err.name;
     
     logger.error('Resend webhook processing error', err, {
       eventType,
       correlationId,
+      errorType,
+      errorMessage: err.message,
+      errorStack: err.stack,
     });
     
     // Emit critical failure event
     emitWebhookFailure(eventType, err, {
       duration: Date.now() - startTime,
       correlationId,
+      errorType,
     });
     
     // Track failed webhook processing
@@ -468,10 +471,39 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     workflowSpan.setError(err);
     workflowSpan.finish();
     
-    // Return 500 for retry on transient errors
+    // Determine if error is retryable (Requirement 10.5)
+    // Return 500 for transient errors (network, timeout, etc.) to trigger retry
+    // Return 400 for permanent errors (validation, etc.) to prevent retry
+    const isTransientError = 
+      err.message.includes('timeout') ||
+      err.message.includes('network') ||
+      err.message.includes('ECONNREFUSED') ||
+      err.message.includes('ETIMEDOUT') ||
+      err.message.includes('service unavailable');
+    
+    if (isTransientError) {
+      logger.info('Returning 500 for transient error to allow retry', {
+        eventType,
+        correlationId,
+        errorType,
+      });
+      
+      return NextResponse.json(
+        { error: 'Internal server error', retryable: true },
+        { status: 500 }
+      );
+    }
+    
+    // Permanent error - return 400 to prevent retry
+    logger.info('Returning 400 for permanent error to prevent retry', {
+      eventType,
+      correlationId,
+      errorType,
+    });
+    
     return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+      { error: 'Bad request', retryable: false },
+      { status: 400 }
     );
   }
 }

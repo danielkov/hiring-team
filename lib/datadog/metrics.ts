@@ -11,7 +11,7 @@ export interface APIRequestMetrics {
 }
 
 export interface AIOperationMetrics {
-  operation: 'job-description' | 'candidate-screening' | 'conversation-pointers';
+  operation: 'job-description' | 'candidate-screening' | 'conversation-pointers' | 'transcript-evaluation';
   model: string;
   latency: number;
   tokenUsage?: number;
@@ -436,6 +436,142 @@ export function trackPolarWebhook(metrics: PolarWebhookMetrics): void {
     eventType: metrics.eventType,
     processingTime: metrics.processingTime,
     success: metrics.success,
+    errorType: metrics.errorType,
+  });
+}
+
+/**
+ * Email send metrics
+ */
+export interface EmailSendMetrics {
+  emailType: 'confirmation' | 'rejection' | 'screening_invitation' | 'comment';
+  organizationId: string;
+  duration: number;
+  success: boolean;
+  errorType?: string;
+}
+
+/**
+ * Track email send operations
+ * Requirements: 3.4, 3.5
+ */
+export function trackEmailSend(metrics: EmailSendMetrics): void {
+  const tracer = getTracer();
+  const span = tracer.scope().active();
+
+  if (span) {
+    span.setTag('email.type', metrics.emailType);
+    span.setTag('email.organization_id', metrics.organizationId);
+    span.setTag('email.duration', metrics.duration);
+    span.setTag('email.success', metrics.success);
+    
+    if (metrics.errorType) {
+      span.setTag('email.error_type', metrics.errorType);
+    }
+  }
+
+  // Send metrics
+  try {
+    const dogstatsd = tracer.dogstatsd;
+    if (dogstatsd) {
+      const tags = [
+        `email_type:${metrics.emailType}`,
+        `organization_id:${metrics.organizationId}`,
+        `success:${metrics.success}`,
+      ];
+      
+      if (metrics.errorType) {
+        tags.push(`error_type:${metrics.errorType}`);
+      }
+      
+      // Increment email sent counter
+      dogstatsd.increment('email.sent', 1, tags);
+      
+      // Track send duration as histogram
+      dogstatsd.histogram('email.send_duration', metrics.duration, tags);
+      
+      // Track errors separately
+      if (!metrics.success) {
+        dogstatsd.increment('email.send_error', 1, tags);
+      }
+    }
+  } catch (error) {
+    logger.warn('Failed to send Datadog metric', { error, metric: 'email.send' });
+  }
+
+  logger.info('Email send tracked', {
+    emailType: metrics.emailType,
+    organizationId: metrics.organizationId,
+    duration: metrics.duration,
+    success: metrics.success,
+    errorType: metrics.errorType,
+  });
+}
+
+/**
+ * Benefit check metrics
+ */
+export interface BenefitCheckMetrics {
+  benefitType: 'email_communication' | 'ai_screening';
+  organizationId: string;
+  hasAccess: boolean;
+  duration: number;
+  errorType?: string;
+}
+
+/**
+ * Track benefit check operations
+ * Requirements: 9.3
+ */
+export function trackBenefitCheck(metrics: BenefitCheckMetrics): void {
+  const tracer = getTracer();
+  const span = tracer.scope().active();
+
+  if (span) {
+    span.setTag('benefit.type', metrics.benefitType);
+    span.setTag('benefit.organization_id', metrics.organizationId);
+    span.setTag('benefit.has_access', metrics.hasAccess);
+    span.setTag('benefit.duration', metrics.duration);
+    
+    if (metrics.errorType) {
+      span.setTag('benefit.error_type', metrics.errorType);
+    }
+  }
+
+  // Send metrics
+  try {
+    const dogstatsd = tracer.dogstatsd;
+    if (dogstatsd) {
+      const tags = [
+        `benefit_type:${metrics.benefitType}`,
+        `organization_id:${metrics.organizationId}`,
+        `has_access:${metrics.hasAccess}`,
+      ];
+      
+      if (metrics.errorType) {
+        tags.push(`error_type:${metrics.errorType}`);
+      }
+      
+      // Increment benefit check counter
+      dogstatsd.increment('benefit.check', 1, tags);
+      
+      // Track check duration as histogram
+      dogstatsd.histogram('benefit.check_duration', metrics.duration, tags);
+      
+      // Track access denials separately for alerting
+      if (!metrics.hasAccess) {
+        dogstatsd.increment('benefit.access_denied', 1, tags);
+      }
+    }
+  } catch (error) {
+    logger.warn('Failed to send Datadog metric', { error, metric: 'benefit.check' });
+  }
+
+  logger.info('Benefit check tracked', {
+    benefitType: metrics.benefitType,
+    organizationId: metrics.organizationId,
+    hasAccess: metrics.hasAccess,
+    duration: metrics.duration,
     errorType: metrics.errorType,
   });
 }

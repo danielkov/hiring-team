@@ -50,15 +50,25 @@ export async function getAgent(agentId: string) {
  * Variables are defined in the agent's configuration using double curly braces {{variable_name}}
  * and are automatically replaced when the conversation starts.
  * 
+ * Requirements: 5.5, 6.1, 6.2, 6.3, 6.4, 6.5
+ * 
  * @param agentId - The ElevenLabs agent ID
  * @param variables - Dynamic variables to pass to the agent
  * @returns Public URL for the agent session
+ * @throws Error if validation fails or URL generation fails
  */
 export async function createAgentSessionLink(
   agentId: string,
   variables: AgentSessionVariables
 ): Promise<string> {
+  const startTime = Date.now();
+  
   try {
+    // Validate agent ID
+    if (!agentId || agentId.trim() === '') {
+      throw new Error('Agent ID is required and cannot be empty');
+    }
+
     // Validate that all required variables are provided
     const requiredVars: (keyof AgentSessionVariables)[] = [
       'company_name',
@@ -73,9 +83,31 @@ export async function createAgentSessionLink(
     );
 
     if (missingVars.length > 0) {
-      throw new Error(
+      const error = new Error(
         `Missing required variables: ${missingVars.join(', ')}`
       );
+      logger.error('Session link validation failed', error, {
+        agentId,
+        missingVars,
+        providedVars: Object.keys(variables).filter(key => variables[key as keyof AgentSessionVariables]),
+      });
+      throw error;
+    }
+
+    // Validate variable content lengths to prevent URL length issues
+    const maxVarLength = 10000; // Reasonable limit for URL parameters
+    const oversizedVars = requiredVars.filter(
+      (key) => variables[key].length > maxVarLength
+    );
+
+    if (oversizedVars.length > 0) {
+      logger.warn('Some variables exceed recommended length', {
+        agentId,
+        oversizedVars: oversizedVars.map(key => ({
+          name: key,
+          length: variables[key].length,
+        })),
+      });
     }
 
     // Encode variables as base64 JSON
@@ -84,19 +116,29 @@ export async function createAgentSessionLink(
     // Construct the public talk-to page URL
     const url = `https://elevenlabs.io/app/talk-to?agent_id=${agentId}&vars=${encodedVars}`;
     
-    logger.info('Created ElevenLabs agent session link', {
+    const duration = Date.now() - startTime;
+    
+    logger.info('Created ElevenLabs agent session link successfully', {
       agentId,
       candidateName: variables.candidate_name,
       companyName: variables.company_name,
+      urlLength: url.length,
+      duration,
     });
 
     return url;
   } catch (error) {
-    logger.error('Failed to create agent session link', error as Error, {
+    const duration = Date.now() - startTime;
+    const err = error instanceof Error ? error : new Error(String(error));
+    
+    logger.error('Failed to create agent session link', err, {
       agentId,
-      candidateName: variables.candidate_name,
+      candidateName: variables?.candidate_name,
+      errorType: err.name,
+      duration,
     });
-    throw new Error(`Failed to create session link: ${(error as Error).message}`);
+    
+    throw new Error(`Failed to create session link: ${err.message}`);
   }
 }
 

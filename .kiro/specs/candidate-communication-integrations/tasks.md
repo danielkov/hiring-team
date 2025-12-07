@@ -187,8 +187,8 @@
 - [ ] 12. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 13. Implement transcript evaluation service
-- [ ] 13.1 Create Cerebras transcript evaluation service
+- [x] 13. Implement transcript evaluation service
+- [x] 13.1 Create Cerebras transcript evaluation service
   - Implement `lib/cerebras/transcript-evaluation.ts`
   - Create prompt for evaluating transcripts
   - Implement `evaluateTranscript()` function
@@ -201,8 +201,8 @@
   - **Property 14: Transcript webhook processing** (partial)
   - **Validates: Requirements 7.2**
 
-- [ ] 14. Implement ElevenLabs webhook handler
-- [ ] 14.1 Create ElevenLabs webhook endpoint
+- [x] 14. Implement ElevenLabs webhook handler
+- [x] 14.1 Create ElevenLabs webhook endpoint
   - Create `app/api/webhooks/elevenlabs/route.ts`
   - Implement webhook signature verification using ElevenLabs SDK
   - Parse conversation completed events
@@ -224,8 +224,8 @@
   - **Property 19: Transcript attachment fallback**
   - **Validates: Requirements 7.1, 7.2, 7.3, 7.4, 7.5, 8.1, 8.3, 8.4**
 
-- [ ] 15. Implement error handling and logging
-- [ ] 15.1 Add comprehensive error handling
+- [x] 15. Implement error handling and logging
+- [x] 15.1 Add comprehensive error handling
   - Add error handling for all email sending operations
   - Add error handling for all webhook processing
   - Add error handling for all benefit checks
@@ -233,7 +233,7 @@
   - Implement retry logic where appropriate
   - _Requirements: 1.4, 3.4, 3.5, 5.5, 8.5, 10.3, 10.4, 10.5_
 
-- [ ] 15.2 Add logging and monitoring
+- [x] 15.2 Add logging and monitoring
   - Add Datadog logging for all email operations
   - Add Datadog logging for all webhook events
   - Add Datadog logging for benefit checks

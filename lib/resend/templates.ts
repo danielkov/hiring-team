@@ -11,6 +11,7 @@
 import { Resend } from 'resend';
 import { config } from '@/lib/config';
 import { logger } from '@/lib/datadog/logger';
+import { trackEmailSend } from '@/lib/datadog/metrics';
 
 // Initialize Resend client
 const resend = new Resend(config.resend.apiKey);
@@ -33,6 +34,7 @@ export interface ConfirmationEmailParams {
   positionTitle: string;
   replyTo?: string;
   messageId?: string;
+  organizationId?: string; // For metrics tracking
 }
 
 /**
@@ -46,12 +48,28 @@ export interface ConfirmationEmailParams {
  * - organization_name: Organization name
  * - position_title: Job position title
  * 
+ * Requirements: 1.1, 1.4
+ * 
  * @param params - Confirmation email parameters
  * @returns Email send response with message ID
- * @throws Error if email sending fails
+ * @throws Error if email sending fails after retries
  */
 export async function sendConfirmationEmail(params: ConfirmationEmailParams) {
+  const startTime = Date.now();
+  
   try {
+    // Validate required parameters
+    if (!params.to || !params.candidateName || !params.organizationName || !params.positionTitle) {
+      const error = new Error('Missing required email parameters');
+      logger.error('Email validation failed', error, {
+        hasTo: !!params.to,
+        hasCandidateName: !!params.candidateName,
+        hasOrganizationName: !!params.organizationName,
+        hasPositionTitle: !!params.positionTitle,
+      });
+      throw error;
+    }
+
     const headers: Record<string, string> = {
       'X-Email-Type': 'confirmation',
     };
@@ -80,32 +98,65 @@ export async function sendConfirmationEmail(params: ConfirmationEmailParams) {
     });
 
     if (error) {
-      logger.error('Failed to send confirmation email', error as Error, {
+      const err = new Error(`Failed to send confirmation email: ${error.message}`);
+      logger.error('Resend API returned error', err, {
         to: params.to,
         candidateName: params.candidateName,
         organizationName: params.organizationName,
         positionTitle: params.positionTitle,
+        errorName: error.name,
+        errorMessage: error.message,
+        duration: Date.now() - startTime,
       });
-      throw new Error(`Failed to send confirmation email: ${error.message}`);
+      throw err;
     }
 
-    logger.info('Confirmation email sent', {
+    const duration = Date.now() - startTime;
+    logger.info('Confirmation email sent successfully', {
       emailId: data?.id,
       to: params.to,
       candidateName: params.candidateName,
       organizationName: params.organizationName,
       positionTitle: params.positionTitle,
+      duration,
     });
+
+    // Track email send metrics
+    if (params.organizationId) {
+      trackEmailSend({
+        emailType: 'confirmation',
+        organizationId: params.organizationId,
+        duration,
+        success: true,
+      });
+    }
 
     return data;
   } catch (error) {
-    logger.error('Failed to send confirmation email', error as Error, {
+    const duration = Date.now() - startTime;
+    const err = error instanceof Error ? error : new Error(String(error));
+    
+    logger.error('Failed to send confirmation email', err, {
       to: params.to,
       candidateName: params.candidateName,
       organizationName: params.organizationName,
       positionTitle: params.positionTitle,
+      errorType: err.name,
+      duration,
     });
-    throw error;
+    
+    // Track email send failure metrics
+    if (params.organizationId) {
+      trackEmailSend({
+        emailType: 'confirmation',
+        organizationId: params.organizationId,
+        duration,
+        success: false,
+        errorType: err.name,
+      });
+    }
+    
+    throw err;
   }
 }
 
@@ -121,6 +172,7 @@ export interface RejectionEmailParams {
   inReplyTo?: string;
   references?: string[];
   idempotencyKey?: string;
+  organizationId?: string; // For metrics tracking
 }
 
 /**
@@ -131,12 +183,28 @@ export interface RejectionEmailParams {
  * - position_title: Job position title
  * - organization_name: Name of the organization
  * 
+ * Requirements: 4.1, 4.4
+ * 
  * @param params - Rejection email parameters
  * @returns Email send response with message ID
- * @throws Error if email sending fails
+ * @throws Error if email sending fails after retries
  */
 export async function sendRejectionEmail(params: RejectionEmailParams) {
+  const startTime = Date.now();
+  
   try {
+    // Validate required parameters
+    if (!params.to || !params.candidateName || !params.positionTitle || !params.organizationName) {
+      const error = new Error('Missing required email parameters');
+      logger.error('Email validation failed', error, {
+        hasTo: !!params.to,
+        hasCandidateName: !!params.candidateName,
+        hasPositionTitle: !!params.positionTitle,
+        hasOrganizationName: !!params.organizationName,
+      });
+      throw error;
+    }
+
     const headers: Record<string, string> = {
       'X-Email-Type': 'rejection',
     };
@@ -171,29 +239,65 @@ export async function sendRejectionEmail(params: RejectionEmailParams) {
     });
 
     if (error) {
-      logger.error('Failed to send rejection email', error as Error, {
+      const err = new Error(`Failed to send rejection email: ${error.message}`);
+      logger.error('Resend API returned error', err, {
         to: params.to,
         candidateName: params.candidateName,
         positionTitle: params.positionTitle,
+        errorName: error.name,
+        errorMessage: error.message,
+        idempotencyKey: params.idempotencyKey,
+        duration: Date.now() - startTime,
       });
-      throw new Error(`Failed to send rejection email: ${error.message}`);
+      throw err;
     }
 
-    logger.info('Rejection email sent', {
+    const duration = Date.now() - startTime;
+    logger.info('Rejection email sent successfully', {
       emailId: data?.id,
       to: params.to,
       candidateName: params.candidateName,
       positionTitle: params.positionTitle,
+      idempotencyKey: params.idempotencyKey,
+      duration,
     });
+
+    // Track email send metrics
+    if (params.organizationId) {
+      trackEmailSend({
+        emailType: 'rejection',
+        organizationId: params.organizationId,
+        duration,
+        success: true,
+      });
+    }
 
     return data;
   } catch (error) {
-    logger.error('Failed to send rejection email', error as Error, {
+    const duration = Date.now() - startTime;
+    const err = error instanceof Error ? error : new Error(String(error));
+    
+    logger.error('Failed to send rejection email', err, {
       to: params.to,
       candidateName: params.candidateName,
       positionTitle: params.positionTitle,
+      errorType: err.name,
+      idempotencyKey: params.idempotencyKey,
+      duration,
     });
-    throw error;
+    
+    // Track email send failure metrics
+    if (params.organizationId) {
+      trackEmailSend({
+        emailType: 'rejection',
+        organizationId: params.organizationId,
+        duration,
+        success: false,
+        errorType: err.name,
+      });
+    }
+    
+    throw err;
   }
 }
 
@@ -209,6 +313,7 @@ export interface ScreeningInvitationEmailParams {
   replyTo?: string;
   inReplyTo?: string;
   references?: string[];
+  organizationId?: string; // For metrics tracking
 }
 
 /**
@@ -220,12 +325,29 @@ export interface ScreeningInvitationEmailParams {
  * - position_title: Job position title
  * - session_link: ElevenLabs agent session URL
  * 
+ * Requirements: 5.1, 5.4, 5.5
+ * 
  * @param params - Screening invitation email parameters
  * @returns Email send response with message ID
- * @throws Error if email sending fails
+ * @throws Error if email sending fails after retries
  */
 export async function sendScreeningInvitationEmail(params: ScreeningInvitationEmailParams) {
+  const startTime = Date.now();
+  
   try {
+    // Validate required parameters
+    if (!params.to || !params.candidateName || !params.organizationName || !params.positionTitle || !params.sessionLink) {
+      const error = new Error('Missing required email parameters');
+      logger.error('Email validation failed', error, {
+        hasTo: !!params.to,
+        hasCandidateName: !!params.candidateName,
+        hasOrganizationName: !!params.organizationName,
+        hasPositionTitle: !!params.positionTitle,
+        hasSessionLink: !!params.sessionLink,
+      });
+      throw error;
+    }
+
     const headers: Record<string, string> = {
       'X-Email-Type': 'screening_invitation',
     };
@@ -259,32 +381,65 @@ export async function sendScreeningInvitationEmail(params: ScreeningInvitationEm
     });
 
     if (error) {
-      logger.error('Failed to send screening invitation email', error as Error, {
+      const err = new Error(`Failed to send screening invitation email: ${error.message}`);
+      logger.error('Resend API returned error', err, {
         to: params.to,
         candidateName: params.candidateName,
         organizationName: params.organizationName,
         positionTitle: params.positionTitle,
+        errorName: error.name,
+        errorMessage: error.message,
+        duration: Date.now() - startTime,
       });
-      throw new Error(`Failed to send screening invitation email: ${error.message}`);
+      throw err;
     }
 
-    logger.info('Screening invitation email sent', {
+    const duration = Date.now() - startTime;
+    logger.info('Screening invitation email sent successfully', {
       emailId: data?.id,
       to: params.to,
       candidateName: params.candidateName,
       organizationName: params.organizationName,
       positionTitle: params.positionTitle,
+      duration,
     });
+
+    // Track email send metrics
+    if (params.organizationId) {
+      trackEmailSend({
+        emailType: 'screening_invitation',
+        organizationId: params.organizationId,
+        duration,
+        success: true,
+      });
+    }
 
     return data;
   } catch (error) {
-    logger.error('Failed to send screening invitation email', error as Error, {
+    const duration = Date.now() - startTime;
+    const err = error instanceof Error ? error : new Error(String(error));
+    
+    logger.error('Failed to send screening invitation email', err, {
       to: params.to,
       candidateName: params.candidateName,
       organizationName: params.organizationName,
       positionTitle: params.positionTitle,
+      errorType: err.name,
+      duration,
     });
-    throw error;
+    
+    // Track email send failure metrics
+    if (params.organizationId) {
+      trackEmailSend({
+        emailType: 'screening_invitation',
+        organizationId: params.organizationId,
+        duration,
+        success: false,
+        errorType: err.name,
+      });
+    }
+    
+    throw err;
   }
 }
 
@@ -300,6 +455,7 @@ export interface CommentEmailParams {
   replyTo?: string;
   inReplyTo?: string;
   references?: string[];
+  organizationId?: string; // For metrics tracking
 }
 
 /**
@@ -311,12 +467,29 @@ export interface CommentEmailParams {
  * - comment_body: The comment content
  * - commenter_name: The name of the person who posted the comment in Linear
  * 
+ * Requirements: 2.1, 2.3
+ * 
  * @param params - Comment email parameters
  * @returns Email send response with message ID
- * @throws Error if email sending fails
+ * @throws Error if email sending fails after retries
  */
 export async function sendCommentEmail(params: CommentEmailParams) {
+  const startTime = Date.now();
+  
   try {
+    // Validate required parameters
+    if (!params.to || !params.candidateName || !params.positionTitle || !params.commentBody || !params.commenterName) {
+      const error = new Error('Missing required email parameters');
+      logger.error('Email validation failed', error, {
+        hasTo: !!params.to,
+        hasCandidateName: !!params.candidateName,
+        hasPositionTitle: !!params.positionTitle,
+        hasCommentBody: !!params.commentBody,
+        hasCommenterName: !!params.commenterName,
+      });
+      throw error;
+    }
+
     const headers: Record<string, string> = {
       'X-Email-Type': 'comment',
     };
@@ -350,28 +523,62 @@ export async function sendCommentEmail(params: CommentEmailParams) {
     });
 
     if (error) {
-      logger.error('Failed to send comment email', error as Error, {
+      const err = new Error(`Failed to send comment email: ${error.message}`);
+      logger.error('Resend API returned error', err, {
         to: params.to,
         candidateName: params.candidateName,
         positionTitle: params.positionTitle,
+        errorName: error.name,
+        errorMessage: error.message,
+        duration: Date.now() - startTime,
       });
-      throw new Error(`Failed to send comment email: ${error.message}`);
+      throw err;
     }
 
-    logger.info('Comment email sent', {
+    const duration = Date.now() - startTime;
+    logger.info('Comment email sent successfully', {
       emailId: data?.id,
       to: params.to,
       candidateName: params.candidateName,
       positionTitle: params.positionTitle,
+      commenterName: params.commenterName,
+      duration,
     });
+
+    // Track email send metrics
+    if (params.organizationId) {
+      trackEmailSend({
+        emailType: 'comment',
+        organizationId: params.organizationId,
+        duration,
+        success: true,
+      });
+    }
 
     return data;
   } catch (error) {
-    logger.error('Failed to send comment email', error as Error, {
+    const duration = Date.now() - startTime;
+    const err = error instanceof Error ? error : new Error(String(error));
+    
+    logger.error('Failed to send comment email', err, {
       to: params.to,
       candidateName: params.candidateName,
       positionTitle: params.positionTitle,
+      errorType: err.name,
+      duration,
     });
-    throw error;
+    
+    // Track email send failure metrics
+    if (params.organizationId) {
+      trackEmailSend({
+        emailType: 'comment',
+        organizationId: params.organizationId,
+        duration,
+        success: false,
+        errorType: err.name,
+      });
+    }
+    
+    throw err;
   }
 }

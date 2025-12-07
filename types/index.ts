@@ -90,3 +90,13 @@ export interface ApplicationResult {
   issueId?: string;
   errors?: ValidationError[];
 }
+
+/**
+ * Transcript evaluation result from AI screening
+ */
+export interface TranscriptEvaluation {
+  result: 'pass' | 'fail' | 'inconclusive';
+  reasoning: string;
+  confidence: 'high' | 'medium' | 'low';
+  keyPoints: string[];
+}
