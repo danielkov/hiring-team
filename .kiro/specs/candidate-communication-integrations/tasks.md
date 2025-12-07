@@ -157,8 +157,8 @@
   - **Property 13: Agent session context completeness**
   - **Validates: Requirements 6.1, 6.2, 6.3, 6.4, 6.5**
 
-- [ ] 10. Implement conversation pointers generation
-- [ ] 10.1 Create Cerebras conversation pointers service
+- [x] 10. Implement conversation pointers generation
+- [x] 10.1 Create Cerebras conversation pointers service
   - Implement `lib/cerebras/conversation-pointers.ts`
   - Create prompt for generating conversation pointers
   - Implement `generateConversationPointers()` function
@@ -170,8 +170,8 @@
   - **Property 13: Agent session context completeness** (partial)
   - **Validates: Requirements 6.4**
 
-- [ ] 11. Implement screening invitation after pre-screening
-- [ ] 11.1 Update state machine to send screening invitations
+- [x] 11. Implement screening invitation after pre-screening
+- [x] 11.1 Update state machine to send screening invitations
   - Modify `lib/linear/state-machine.ts` to check AI screening benefit when issue moves to "In Progress" with "Pre-screened" label
   - Generate conversation pointers using Cerebras
   - Create ElevenLabs agent session link with dynamic variables

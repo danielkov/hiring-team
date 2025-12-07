@@ -11,7 +11,7 @@ export interface APIRequestMetrics {
 }
 
 export interface AIOperationMetrics {
-  operation: 'job-description' | 'candidate-screening';
+  operation: 'job-description' | 'candidate-screening' | 'conversation-pointers';
   model: string;
   latency: number;
   tokenUsage?: number;

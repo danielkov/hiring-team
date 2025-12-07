@@ -14,13 +14,17 @@ import {
   addIssueComment 
 } from './state-management';
 import { checkMeterBalance } from '@/lib/polar/usage-meters';
-import { checkEmailCommunicationBenefit } from '@/lib/polar/benefits';
-import { sendConfirmationEmail, sendRejectionEmail } from '@/lib/resend/templates';
+import { checkEmailCommunicationBenefit, checkAIScreeningBenefit } from '@/lib/polar/benefits';
+import { sendConfirmationEmail, sendRejectionEmail, sendScreeningInvitationEmail } from '@/lib/resend/templates';
 import { 
   generateReplyToAddress, 
   getLastMessageId, 
   buildThreadReferences 
 } from '@/lib/resend/email-threading';
+import { generateConversationPointers } from '@/lib/cerebras/conversation-pointers';
+import { createAgentSessionLink } from '@/lib/elevenlabs/client';
+import { config } from '@/lib/config';
+import { redis } from '@/lib/redis';
 import { withRetry, isRetryableError } from '../utils/retry';
 import { logger } from '@/lib/datadog/logger';
 import { Issue, Project } from '@linear/sdk';
@@ -33,6 +37,7 @@ export const STATE_LABELS = {
   PROCESSED: 'Processed',
   PRE_SCREENED: 'Pre-screened',
   REJECTION_EMAIL_SENT: 'Rejection-Email-Sent',
+  SCREENING_INVITATION_SENT: 'Screening-Invitation-Sent',
 } as const;
 
 /**
@@ -113,7 +118,13 @@ export async function handleIssueUpdate(
     return;
   }
   
-  // Transition 2: Declined → Send Rejection Email (if benefit exists)
+  // Transition 2: In Progress + Pre-screened → Send AI Screening Invitation (if benefit exists)
+  if (stateName === STATE_STATUSES.IN_PROGRESS && labelNames.includes(STATE_LABELS.PRE_SCREENED)) {
+    await sendScreeningInvitationIfEnabled(issue, project, linearOrgId, linearOrgSlug, linearAccessToken);
+    return;
+  }
+  
+  // Transition 3: Declined → Send Rejection Email (if benefit exists)
   if (stateName === STATE_STATUSES.DECLINED) {
     await sendRejectionEmailIfEnabled(issue, project, linearOrgId, linearOrgSlug, linearAccessToken);
     return;
@@ -686,6 +697,316 @@ async function sendRejectionEmailIfEnabled(
   } catch (error) {
     // Log error but don't throw - we don't want to block issue processing
     logger.error('Error in sendRejectionEmailIfEnabled', error instanceof Error ? error : new Error(String(error)), {
+      issueId: issue.id,
+      linearOrgId,
+    });
+  }
+}
+
+/**
+ * Send screening invitation email if organization has AI screening benefit
+ * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.3, 6.4, 6.5
+ */
+async function sendScreeningInvitationIfEnabled(
+  issue: Issue,
+  project: Project,
+  linearOrgId: string,
+  linearOrgSlug: string,
+  linearAccessToken: string
+): Promise<void> {
+  try {
+    logger.info('Checking AI screening benefit for screening invitation', { 
+      issueId: issue.id,
+      linearOrgId,
+    });
+    
+    // Check if organization has AI screening benefit (Requirement 5.3)
+    const hasAIScreeningBenefit = await checkAIScreeningBenefit(linearOrgId);
+    
+    if (!hasAIScreeningBenefit) {
+      logger.info('Organization does not have AI screening benefit, skipping screening invitation', {
+        issueId: issue.id,
+        linearOrgId,
+      });
+      return;
+    }
+    
+    // Check if screening invitation already sent using label (idempotence)
+    const labels = await issue.labels();
+    const labelNames = labels.nodes.map(l => l.name);
+    const screeningInvitationAlreadySent = labelNames.includes(STATE_LABELS.SCREENING_INVITATION_SENT);
+    
+    if (screeningInvitationAlreadySent) {
+      logger.info('Screening invitation already sent (label present), skipping duplicate', {
+        issueId: issue.id,
+      });
+      return;
+    }
+    
+    // Extract candidate information from issue description
+    const candidateInfo = extractCandidateInfo(issue.description || '');
+    
+    if (!candidateInfo) {
+      logger.error('Could not extract candidate info from issue, skipping screening invitation', undefined, {
+        issueId: issue.id,
+      });
+      return;
+    }
+    
+    // Get position title from project (Requirement 5.4)
+    const positionTitle = project.name || 'Position';
+    
+    // Get organization name from Linear org (Requirement 6.1)
+    const team = await issue.team;
+    if (!team) {
+      logger.error('Issue team not found', undefined, { issueId: issue.id });
+      return;
+    }
+    const organization = await team.organization;
+    const organizationName = organization?.name || 'Our Team';
+    
+    // Get job description from project content (Requirement 6.3)
+    const jobDescription = project.content || project.description || '';
+    
+    if (!jobDescription) {
+      logger.error('Job description not found in project, skipping screening invitation', undefined, {
+        issueId: issue.id,
+        projectId: project.id,
+      });
+      return;
+    }
+    
+    // Get candidate application from issue description (Requirement 6.2)
+    const candidateApplication = issue.description || '';
+    
+    if (!candidateApplication) {
+      logger.error('Candidate application not found in issue, skipping screening invitation', undefined, {
+        issueId: issue.id,
+      });
+      return;
+    }
+    
+    // Extract candidate's first name (Requirement 6.5)
+    const candidateFirstName = candidateInfo.name.split(' ')[0] || candidateInfo.name;
+    
+    logger.info('Generating conversation pointers for screening', {
+      issueId: issue.id,
+      linearOrgId,
+      jobDescriptionLength: jobDescription.length,
+      candidateApplicationLength: candidateApplication.length,
+    });
+    
+    // Generate conversation pointers using Cerebras (Requirement 6.4)
+    let conversationPointers: string;
+    try {
+      const pointersResult = await generateConversationPointers(
+        jobDescription,
+        candidateApplication,
+        linearOrgId
+      );
+      
+      // Format pointers as a bulleted list
+      conversationPointers = pointersResult.pointers
+        .map((pointer, index) => `${index + 1}. ${pointer}`)
+        .join('\n');
+      
+      logger.info('Conversation pointers generated successfully', {
+        issueId: issue.id,
+        pointerCount: pointersResult.pointers.length,
+      });
+    } catch (pointersError) {
+      // Log error and notify administrators (Requirement 5.5)
+      logger.error('Failed to generate conversation pointers', pointersError instanceof Error ? pointersError : new Error(String(pointersError)), {
+        issueId: issue.id,
+        linearOrgId,
+      });
+      
+      // Add comment noting the failure
+      try {
+        await addIssueComment(
+          linearAccessToken,
+          issue.id,
+          `*Failed to generate conversation pointers for AI screening. Error: ${pointersError instanceof Error ? pointersError.message : 'Unknown error'}*`
+        );
+      } catch (commentError) {
+        logger.error('Failed to add conversation pointers failure comment', commentError instanceof Error ? commentError : new Error(String(commentError)), {
+          issueId: issue.id,
+        });
+      }
+      
+      return;
+    }
+    
+    logger.info('Creating ElevenLabs agent session link', {
+      issueId: issue.id,
+      agentId: config.elevenlabs.agentId,
+      candidateName: candidateFirstName,
+      organizationName,
+    });
+    
+    // Create ElevenLabs agent session link with dynamic variables (Requirements 6.1-6.5)
+    let sessionLink: string;
+    try {
+      sessionLink = await createAgentSessionLink(
+        config.elevenlabs.agentId,
+        {
+          company_name: organizationName,
+          candidate_name: candidateFirstName,
+          job_description: jobDescription,
+          job_application: candidateApplication,
+          conversation_pointers: conversationPointers,
+        }
+      );
+      
+      logger.info('ElevenLabs agent session link created successfully', {
+        issueId: issue.id,
+        sessionLink: sessionLink.substring(0, 100), // Log first 100 chars
+      });
+    } catch (sessionError) {
+      // Log error and notify administrators (Requirement 5.5)
+      logger.error('Failed to create ElevenLabs agent session link', sessionError instanceof Error ? sessionError : new Error(String(sessionError)), {
+        issueId: issue.id,
+        agentId: config.elevenlabs.agentId,
+      });
+      
+      // Add comment noting the failure
+      try {
+        await addIssueComment(
+          linearAccessToken,
+          issue.id,
+          `*Failed to create AI screening session link. Error: ${sessionError instanceof Error ? sessionError.message : 'Unknown error'}*`
+        );
+      } catch (commentError) {
+        logger.error('Failed to add session link failure comment', commentError instanceof Error ? commentError : new Error(String(commentError)), {
+          issueId: issue.id,
+        });
+      }
+      
+      return;
+    }
+    
+    // Generate dynamic reply-to address using organization slug
+    const replyToAddress = generateReplyToAddress(linearOrgSlug, issue.id);
+    
+    // Get all comments for threading
+    const issueComments = await issue.comments();
+    const commentBodies = issueComments.nodes.map(c => c.body || '');
+    
+    // Extract threading information from previous comments
+    const lastMessageId = getLastMessageId(commentBodies);
+    const references = buildThreadReferences(commentBodies);
+    
+    logger.info('Sending screening invitation email', {
+      issueId: issue.id,
+      candidateEmail: candidateInfo.email,
+      candidateName: candidateInfo.name,
+      positionTitle,
+      organizationName,
+      replyToAddress,
+      hasThreading: !!lastMessageId,
+      referencesCount: references.length,
+    });
+    
+    // Send screening invitation email (Requirement 5.1)
+    try {
+      const emailResult = await sendScreeningInvitationEmail({
+        to: candidateInfo.email,
+        candidateName: candidateInfo.name,
+        organizationName,
+        positionTitle,
+        sessionLink,
+        replyTo: replyToAddress,
+        inReplyTo: lastMessageId || undefined,
+        references: references.length > 0 ? references : undefined,
+      });
+      
+      logger.info('Screening invitation email sent successfully', {
+        issueId: issue.id,
+        emailId: emailResult?.id,
+        candidateEmail: candidateInfo.email,
+      });
+      
+      // Generate a unique session ID for Redis storage
+      const sessionId = `${linearOrgSlug}-${issue.id}-${Date.now()}`;
+      
+      // Store session metadata in Redis
+      const sessionData = {
+        issueId: issue.id,
+        candidateEmail: candidateInfo.email,
+        candidateName: candidateInfo.name,
+        linearOrg: linearOrgSlug,
+        projectId: project.id,
+        jobDescription,
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
+      };
+      
+      const redisKey = `screening:session:${sessionId}`;
+      await redis.set(redisKey, sessionData, {
+        ex: 7 * 24 * 60 * 60, // 7 days in seconds
+      });
+      
+      logger.info('Stored screening session metadata in Redis', {
+        issueId: issue.id,
+        sessionId,
+        redisKey,
+      });
+      
+      // Get the client to add the label
+      const client = createLinearClient(linearAccessToken);
+      
+      // Ensure "Screening-Invitation-Sent" label exists
+      const screeningInvitationSentLabelId = await ensureLabel(client, STATE_LABELS.SCREENING_INVITATION_SENT);
+      
+      // Get current labels
+      const currentLabels = await issue.labels();
+      const currentLabelIds = currentLabels.nodes.map(l => l.id);
+      
+      // Add the "Screening-Invitation-Sent" label to mark idempotency
+      await client.updateIssue(issue.id, {
+        labelIds: [...currentLabelIds, screeningInvitationSentLabelId],
+      });
+      
+      // Add comment to Linear Issue documenting the invitation (Requirement 5.2)
+      // Include Message-ID for future threading
+      const messageId = emailResult?.id || 'unknown';
+      const commentBody = `*AI Screening invitation sent to ${candidateInfo.email}*\n\nThe candidate has been invited to complete an AI-powered screening interview.\n\nSession ID: ${sessionId}\n\n---\n\nMessage-ID: ${messageId}`;
+      
+      await addIssueComment(
+        linearAccessToken,
+        issue.id,
+        commentBody
+      );
+      
+      logger.info('Added screening invitation comment and label to issue', {
+        issueId: issue.id,
+        messageId,
+        sessionId,
+      });
+    } catch (emailError) {
+      // Handle email sending failures gracefully - log but don't throw
+      logger.error('Failed to send screening invitation email', emailError instanceof Error ? emailError : new Error(String(emailError)), {
+        issueId: issue.id,
+        candidateEmail: candidateInfo.email,
+        positionTitle,
+      });
+      
+      // Add comment noting the failure
+      try {
+        await addIssueComment(
+          linearAccessToken,
+          issue.id,
+          `*Failed to send AI screening invitation email to ${candidateInfo.email}. Error: ${emailError instanceof Error ? emailError.message : 'Unknown error'}*`
+        );
+      } catch (commentError) {
+        logger.error('Failed to add email failure comment', commentError instanceof Error ? commentError : new Error(String(commentError)), {
+          issueId: issue.id,
+        });
+      }
+    }
+  } catch (error) {
+    // Log error but don't throw - we don't want to block issue processing
+    logger.error('Error in sendScreeningInvitationIfEnabled', error instanceof Error ? error : new Error(String(error)), {
       issueId: issue.id,
       linearOrgId,
     });
