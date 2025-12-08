@@ -93,7 +93,6 @@ export function InterviewClient({ secret }: InterviewClientProps) {
         signedUrl: signedUrl,
         // Pass dynamic variables to the agent
         // These will be injected into the agent's system prompt and first message
-        // using the {{variable_name}} syntax you configured in the ElevenLabs dashboard
         dynamicVariables: {
           company_name: sessionData.companyName,
           candidate_name: sessionData.candidateName,
