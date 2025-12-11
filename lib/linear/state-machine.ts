@@ -24,10 +24,10 @@ import {
 import { generateConversationPointers } from '@/lib/cerebras/conversation-pointers';
 import { createScreeningSession } from '@/lib/elevenlabs/session-secrets';
 import { config } from '@/lib/config';
-import { redis } from '@/lib/redis';
 import { withRetry, isRetryableError } from '../utils/retry';
 import { logger } from '@/lib/datadog/logger';
 import { Issue, Project } from '@linear/sdk';
+import { extractCandidateMetadata } from './candidate-metadata';
 
 /**
  * State machine labels
@@ -1075,15 +1075,21 @@ async function ensureLabel(
 }
 
 /**
- * Extract candidate information from issue description
- * Parses the structured description to get name and email
+ * Extract candidate information from issue metadata (preferred) or fallback to parsing description
  */
 function extractCandidateInfo(issueDescription: string): { name: string; email: string } | null {
   try {
-    // Parse the issue description which has format:
-    // # Candidate Application
-    // **Name:** John Doe
-    // **Email:** john@example.com
+    // First try to extract from metadata
+    const metadata = extractCandidateMetadata(issueDescription);
+    if (metadata) {
+      return {
+        name: metadata.name,
+        email: metadata.email,
+      };
+    }
+    
+    // Fallback to parsing markdown for backward compatibility
+    logger.warn('No candidate metadata found, falling back to markdown parsing');
     
     const nameMatch = issueDescription.match(/\*\*Name:\*\*\s*(.+)/);
     const emailMatch = issueDescription.match(/\*\*Email:\*\*\s*(.+)/);
@@ -1096,9 +1102,23 @@ function extractCandidateInfo(issueDescription: string): { name: string; email: 
       return null;
     }
     
+    let email = emailMatch[1].trim();
+    
+    // Handle markdown link format: [email@example.com](mailto:email@example.com)
+    const markdownLinkMatch = email.match(/\[([^\]]+@[^\]]+)\]/);
+    if (markdownLinkMatch) {
+      email = markdownLinkMatch[1];
+    }
+    
+    // Fallback: extract email pattern from any text
+    const emailPatternMatch = email.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+    if (emailPatternMatch) {
+      email = emailPatternMatch[1];
+    }
+    
     return {
       name: nameMatch[1].trim(),
-      email: emailMatch[1].trim(),
+      email: email,
     };
   } catch (error) {
     logger.error('Error extracting candidate info', error instanceof Error ? error : new Error(String(error)));

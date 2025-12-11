@@ -9,6 +9,7 @@ import { createLinearClient } from './client';
 import { Issue } from '@linear/sdk';
 import { getOrgConfig } from '../redis';
 import { withRetry, isRetryableError } from '../utils/retry';
+import { generateCandidateMetadata, embedCandidateMetadata } from './candidate-metadata';
 
 /**
  * Create a candidate Issue in Linear for a job application
@@ -92,9 +93,12 @@ export async function createCandidateIssue(
     }
   }
   
+  // Generate metadata for the candidate
+  const metadata = generateCandidateMetadata(candidateData.name, candidateData.email);
+  
   // Create the Issue title and description
   const issueTitle = `${candidateData.name} - Application`;
-  const issueDescription = `
+  const baseDescription = `
 # Candidate Application
 
 **Name:** ${candidateData.name}
@@ -104,6 +108,9 @@ export async function createCandidateIssue(
 - CV: Attached
 ${candidateData.coverLetterFile ? '- Cover Letter: Attached' : ''}
   `.trim();
+  
+  // Embed metadata in the description
+  const issueDescription = embedCandidateMetadata(baseDescription, metadata);
   
   // Create the Issue with retry logic and "New" label
   const issuePayload = await withRetry(
