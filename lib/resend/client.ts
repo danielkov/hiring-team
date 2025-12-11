@@ -95,11 +95,21 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailSendRespo
  */
 export async function sendTemplateEmail(params: SendTemplateEmailParams): Promise<EmailSendResponse> {
   try {
-    const { data, error } = await resend.emails.send({
-      from: config.resend.fromEmail,
+    // TODO: remove
+    console.log({
+      from: `Clark Hiring <${config.resend.fromEmail}>`,
       to: params.to,
       subject: params.subject,
-      react: params.template as any, // Resend SDK expects 'react' for templates
+      template: params.template,
+      replyTo: params.replyTo,
+      headers: params.headers,
+      tags: params.tags,
+    });
+    const { data, error } = await resend.emails.send({
+      from: `Clark Hiring <${config.resend.fromEmail}>`,
+      to: params.to,
+      subject: params.subject,
+      template: params.template,
       replyTo: params.replyTo,
       headers: params.headers,
       tags: params.tags,
