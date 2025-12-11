@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { exchangeCodeForToken } from '@/lib/linear/oauth';
-import { storeLinearTokens } from '@/lib/linear/metadata';
+import { storeLinearTokens, storeOrgConfigInRedis } from '@/lib/linear/metadata';
 import { config } from '@/lib/config';
 import { withAuth } from '@workos-inc/authkit-nextjs';
 import { emitAuthenticationFailure } from '@/lib/datadog/events';
@@ -59,46 +59,17 @@ export async function GET(request: NextRequest) {
     // Calculate token expiry timestamp
     const expiresAt = Date.now() + expiresIn * 1000;
 
-    // Store tokens in WorkOS user metadata
-    await storeLinearTokens(user.id, {
+    const tokens = {
       accessToken,
       refreshToken,
       expiresAt,
-    });
+    };
 
-    // Fetch organization info and store in Redis
-    try {
-      const { LinearClient } = await import('@linear/sdk');
-      const { storeOrgConfig } = await import('@/lib/redis');
-      const { getATSContainerInitiativeId } = await import('@/lib/linear/metadata');
-      
-      const linearClient = new LinearClient({ accessToken });
-      const organization = await linearClient.organization;
-      
-      // Get ATS container initiative ID if it exists
-      const atsContainerInitiativeId = await getATSContainerInitiativeId(user.id) || '';
-      
-      // Store org config in Redis
-      await storeOrgConfig(organization.name, {
-        accessToken,
-        refreshToken,
-        expiresAt,
-        orgId: organization.id,
-        orgName: organization.name,
-        atsContainerInitiativeId,
-      });
-      
-      logger.info('Linear organization config stored in Redis', {
-        userId: user.id,
-        orgId: organization.id,
-        orgName: organization.name,
-      });
-    } catch (redisErr) {
-      // Log but don't fail the auth flow if Redis storage fails
-      logger.error('Failed to store org config in Redis', redisErr instanceof Error ? redisErr : new Error(String(redisErr)), {
-        userId: user.id,
-      });
-    }
+    // Store tokens in WorkOS user metadata
+    await storeLinearTokens(user.id, tokens);
+
+    // Store organization config in Redis
+    await storeOrgConfigInRedis(user.id, tokens);
 
     // Redirect to original destination or dashboard
     const redirectPath = state || '/dashboard';

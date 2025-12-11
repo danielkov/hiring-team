@@ -44,12 +44,18 @@ export async function getLinearClient(): Promise<LinearClient> {
       // Calculate new expiry
       const expiresAt = Date.now() + expiresIn * 1000;
 
-      // Update WorkOS metadata with new tokens
-      await storeLinearTokens(user.id, {
+      const newTokens = {
         accessToken,
         refreshToken,
         expiresAt,
-      });
+      };
+
+      // Update WorkOS metadata with new tokens
+      await storeLinearTokens(user.id, newTokens);
+
+      // Store organization config in Redis
+      const { storeOrgConfigInRedis } = await import('./metadata');
+      await storeOrgConfigInRedis(user.id, newTokens);
 
       // Return client with new token
       return new LinearClient({

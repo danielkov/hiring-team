@@ -64,6 +64,8 @@ export async function saveOrgConfigToRedis() {
     // Get organization info
     const organization = await client.organization;
 
+    client.authenticationSessions
+
     // Get ATS Container Initiative ID
     const atsContainerInitiativeId = await getATSContainerInitiativeId(user.id);
 

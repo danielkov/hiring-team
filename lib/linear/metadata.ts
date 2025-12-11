@@ -129,3 +129,46 @@ export async function getATSContainerInitiativeId(userId: string): Promise<strin
     return null;
   }
 }
+
+/**
+ * Store organization config in Redis
+ * Should be called after storeLinearTokens to sync org data to Redis
+ */
+export async function storeOrgConfigInRedis(
+  userId: string,
+  tokens: LinearTokens
+): Promise<void> {
+  try {
+    const { LinearClient } = await import('@linear/sdk');
+    const { storeOrgConfig } = await import('@/lib/redis');
+    const { logger } = await import('@/lib/datadog/logger');
+    
+    const linearClient = new LinearClient({ accessToken: tokens.accessToken });
+    const organization = await linearClient.organization;
+    
+    // Get ATS container initiative ID if it exists
+    const atsContainerInitiativeId = await getATSContainerInitiativeId(userId) || '';
+    
+    // Store org config in Redis
+    await storeOrgConfig(organization.name, {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresAt: tokens.expiresAt,
+      orgId: organization.id,
+      orgName: organization.name,
+      atsContainerInitiativeId,
+    });
+    
+    logger.info('Linear organization config stored in Redis', {
+      userId,
+      orgId: organization.id,
+      orgName: organization.name,
+    });
+  } catch (error) {
+    // Log but don't fail if Redis storage fails
+    const { logger } = await import('@/lib/datadog/logger');
+    logger.error('Failed to store org config in Redis', error instanceof Error ? error : new Error(String(error)), {
+      userId,
+    });
+  }
+}
