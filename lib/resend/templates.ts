@@ -452,6 +452,7 @@ export interface CommentEmailParams {
   positionTitle: string;
   commenterName: string;
   commentBody: string;
+  organizationName: string;
   replyTo?: string;
   inReplyTo?: string;
   references?: string[];
@@ -513,6 +514,7 @@ export async function sendCommentEmail(params: CommentEmailParams) {
           position_title: params.positionTitle,
           comment_body: params.commentBody,
           commenter_name: params.commenterName,
+          organization_name: params.organizationName,
         },
       },
       replyTo: params.replyTo,

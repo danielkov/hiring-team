@@ -173,6 +173,8 @@ export async function handleCommentToEmail(
     const commentUser = await comment.user;
     const commentUserId = commentUser?.id;
     const commentUserName = commentUser?.name || 'Team Member';
+    const organization = await client.organization;
+    const organizationName = organization?.name || 'Our Team';
     
     logger.info('Processing comment', {
       commentId,
@@ -282,6 +284,7 @@ export async function handleCommentToEmail(
         replyTo: replyToAddress,
         inReplyTo: lastMessageId || undefined,
         references: references.length > 0 ? references : undefined,
+        organizationName,
       });
       
       // Add note to Linear Issue documenting email sent (Requirement 2.3)
