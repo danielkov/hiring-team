@@ -50,6 +50,33 @@ export const STATE_STATUSES = {
   DECLINED: 'Declined',
 } as const;
 
+const STATE_STATUS_DETAILS = {
+  TODO: {
+    color: "blue",
+    type: "unstarted",
+    description: "Work that has been accepted but not yet started.",
+  },
+
+  TRIAGE: {
+    color: "yellow",
+    type: "triage",
+    description: "New or unreviewed work awaiting prioritization or assignment.",
+  },
+
+  IN_PROGRESS: {
+    color: "purple",
+    type: "started",
+    description: "Work actively being worked on.",
+  },
+
+  DECLINED: {
+    color: "red",
+    type: "canceled",
+    description: "Work that has been reviewed but will not be pursued.",
+  },
+} as const;
+
+
 /**
  * Handle issue update events from Linear webhook
  * Advances the state machine based on current labels and status
@@ -467,12 +494,16 @@ async function runScreening(
     
     // Map to state machine statuses
     let newStatusName: string;
+    let info;
     if (targetState === 'In Progress') {
       newStatusName = STATE_STATUSES.IN_PROGRESS;
+      info = STATE_STATUS_DETAILS.IN_PROGRESS;
     } else if (targetState === 'Declined') {
       newStatusName = STATE_STATUSES.DECLINED;
+      info = STATE_STATUS_DETAILS.DECLINED;
     } else {
       newStatusName = STATE_STATUSES.TRIAGE;
+      info = STATE_STATUS_DETAILS.TRIAGE;
     }
     
     // Get team and find target state
@@ -482,11 +513,21 @@ async function runScreening(
       return;
     }
     const states = await team.states();
-    const targetStateObj = states.nodes.find((s) => s.name === newStatusName);
+    let targetStateObj = states.nodes.find((s) => s.name === newStatusName);
     
     if (!targetStateObj) {
-      logger.error('Target state not found', undefined, { issueId: issue.id, newStatusName });
+      logger.warn('Target state not found', { issueId: issue.id, newStatusName });
+      // create target state
+      const result = await client.createWorkflowState({
+        name: newStatusName,
+        ...info,
+        teamId: team.id,
+      });
+      targetStateObj = await result.workflowState;
       return;
+    }
+    if (!targetStateObj) {
+      logger.error('Failed to create target state', undefined, { issueId: issue.id, newStatusName });
     }
     
     // Get current labels and prepare new label set
