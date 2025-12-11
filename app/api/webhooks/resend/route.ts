@@ -253,6 +253,10 @@ async function handleEmailReceived(event: ResendInboundEmailEvent, correlationId
     );
     
     if (!email) {
+      logger.error('Email not found', undefined, {
+        id: event.data.email_id,
+        data: event.data,
+      });
       throw new Error('Email not found');
     }
 

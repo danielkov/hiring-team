@@ -95,16 +95,6 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailSendRespo
  */
 export async function sendTemplateEmail(params: SendTemplateEmailParams): Promise<EmailSendResponse> {
   try {
-    // TODO: remove
-    console.log({
-      from: `Clark Hiring <${config.resend.fromEmail}>`,
-      to: params.to,
-      subject: params.subject,
-      template: params.template,
-      replyTo: params.replyTo,
-      headers: params.headers,
-      tags: params.tags,
-    });
     const { data, error } = await resend.emails.send({
       from: `Clark Hiring <${config.resend.fromEmail}>`,
       to: params.to,
