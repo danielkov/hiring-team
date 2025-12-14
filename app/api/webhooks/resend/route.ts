@@ -151,11 +151,10 @@ async function handleEmailReceived(event: ResendInboundEmailEvent, correlationId
     return;
   }
   
-  const { linearOrg, issueId, commentId } = parsed;
+  const { linearOrg, commentId } = parsed;
 
   logger.info('Parsed to address', {
     linearOrg,
-    issueId,
     commentId,
     from: data.from,
     correlationId,
@@ -167,7 +166,6 @@ async function handleEmailReceived(event: ResendInboundEmailEvent, correlationId
   if (!orgConfig) {
     logger.error('Organization config not found in Redis - orphaned email', undefined, {
       linearOrg,
-      issueId,
       from: data.from,
       correlationId,
     });
@@ -178,7 +176,6 @@ async function handleEmailReceived(event: ResendInboundEmailEvent, correlationId
       new Error('Organization config not found'),
       {
         linearOrg,
-        issueId,
         from: data.from,
         correlationId,
       }
@@ -189,57 +186,6 @@ async function handleEmailReceived(event: ResendInboundEmailEvent, correlationId
   
   // Create Linear client with org access token
   const linearClient = createLinearClient(orgConfig.accessToken);
-  
-  // Verify the issue exists
-  let issue;
-  try {
-    issue = await linearClient.issue(issueId);
-    
-    if (!issue) {
-      logger.error('Linear Issue not found - orphaned email', undefined, {
-        linearOrg,
-        issueId,
-        from: data.from,
-        correlationId,
-      });
-      
-      // Emit event for monitoring/alerting
-      emitWebhookFailure(
-        'resend:orphaned_email',
-        new Error('Linear Issue not found'),
-        {
-          linearOrg,
-          issueId,
-          from: data.from,
-          correlationId,
-        }
-      );
-      
-      return;
-    }
-  } catch (error) {
-    logger.error('Error fetching Linear Issue', error as Error, {
-      linearOrg,
-      issueId,
-      from: data.from,
-      correlationId,
-    });
-    
-    // Emit event for monitoring/alerting
-    emitWebhookFailure(
-      'resend:issue_fetch_error',
-      error as Error,
-      {
-        linearOrg,
-        issueId,
-        from: data.from,
-        correlationId,
-      }
-    );
-    
-    // Return 500 for retry
-    throw error;
-  }
 
   let rawContent;
   try {
@@ -270,7 +216,6 @@ async function handleEmailReceived(event: ResendInboundEmailEvent, correlationId
     rawContent = data?.text;
   } catch (error) {
     logger.error('Error reading received email', error as Error, {
-      issueId: issue.id,
       from: data.from,
       correlationId,
     });
@@ -280,7 +225,6 @@ async function handleEmailReceived(event: ResendInboundEmailEvent, correlationId
   if (!rawContent) {
     logger.warn('Email has no content', {
       from: data.from,
-      issueId,
       correlationId,
     });
     return;
@@ -296,15 +240,15 @@ async function handleEmailReceived(event: ResendInboundEmailEvent, correlationId
 
   // Add threaded comment to Linear Issue (reply to the system email comment)
   try {
+    const thread = await linearClient.comment({ id: commentId });
     await linearClient.createComment({
-      issueId: issue.id,
+      issueId: thread.issueId,
       parentId: commentId,
       body: cleanedContent,
       createAsUser: candidateName,
     });
 
     logger.info('Added email reply as threaded comment to Linear Issue', {
-      issueId: issue.id,
       parentCommentId: commentId,
       from: data.from,
       candidateName,
@@ -312,7 +256,6 @@ async function handleEmailReceived(event: ResendInboundEmailEvent, correlationId
     });
   } catch (error) {
     logger.error('Error adding threaded comment to Linear Issue', error as Error, {
-      issueId: issue.id,
       parentCommentId: commentId,
       from: data.from,
       correlationId,
@@ -323,7 +266,6 @@ async function handleEmailReceived(event: ResendInboundEmailEvent, correlationId
       'resend:comment_creation_error',
       error as Error,
       {
-        issueId: issue.id,
         parentCommentId: commentId,
         from: data.from,
         correlationId,

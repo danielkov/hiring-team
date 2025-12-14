@@ -56,7 +56,7 @@ export interface ConfirmationEmailParams {
  */
 export async function sendConfirmationEmail(params: ConfirmationEmailParams) {
   const startTime = Date.now();
-  
+
   try {
     // Validate required parameters
     if (!params.to || !params.candidateName || !params.organizationName || !params.positionTitle) {
@@ -191,7 +191,7 @@ export interface RejectionEmailParams {
  */
 export async function sendRejectionEmail(params: RejectionEmailParams) {
   const startTime = Date.now();
-  
+
   try {
     // Validate required parameters
     if (!params.to || !params.candidateName || !params.positionTitle || !params.organizationName) {
@@ -333,7 +333,7 @@ export interface ScreeningInvitationEmailParams {
  */
 export async function sendScreeningInvitationEmail(params: ScreeningInvitationEmailParams) {
   const startTime = Date.now();
-  
+
   try {
     // Validate required parameters
     if (!params.to || !params.candidateName || !params.organizationName || !params.positionTitle || !params.sessionLink) {
@@ -476,7 +476,7 @@ export interface CommentEmailParams {
  */
 export async function sendCommentEmail(params: CommentEmailParams) {
   const startTime = Date.now();
-  
+
   try {
     // Validate required parameters
     if (!params.to || !params.candidateName || !params.positionTitle || !params.commentBody || !params.commenterName) {

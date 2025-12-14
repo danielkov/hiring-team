@@ -233,7 +233,7 @@ async function sendConfirmationEmailIfEnabled(
     }
 
     // Generate dynamic reply-to address WITH comment ID for threading
-    const replyToAddress = generateReplyToAddress(linearOrgSlug, issue.id, commentId);
+    const replyToAddress = generateReplyToAddress(linearOrgSlug, commentId);
 
     logger.info('Sending confirmation email', {
       issueId: issue.id,
@@ -686,7 +686,7 @@ async function sendRejectionEmailIfEnabled(
     }
 
     // Generate dynamic reply-to address WITH comment ID for threading
-    const replyToAddress = generateReplyToAddress(linearOrgSlug, issue.id, commentId);
+    const replyToAddress = generateReplyToAddress(linearOrgSlug, commentId);
 
     // Get all comments for threading
     const issueComments = await issue.comments();
@@ -992,7 +992,7 @@ async function sendScreeningInvitationIfEnabled(
     }
 
     // Generate dynamic reply-to address WITH comment ID for threading
-    const replyToAddress = generateReplyToAddress(linearOrgSlug, issue.id, commentId);
+    const replyToAddress = generateReplyToAddress(linearOrgSlug, commentId);
 
     // Get all comments for threading
     const issueComments = await issue.comments();

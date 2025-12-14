@@ -281,7 +281,7 @@ export async function handleCommentToEmail(
     const positionTitle = project.name;
 
     // Generate reply-to address using PARENT comment ID for proper threading
-    const replyToAddress = generateReplyToAddress(linearOrgSlug, issue.id, parentCommentId);
+    const replyToAddress = generateReplyToAddress(linearOrgSlug, parentCommentId);
 
     // Get all comments for threading
     const issueComments = await issue.comments();
