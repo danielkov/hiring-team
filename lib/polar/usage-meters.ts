@@ -12,8 +12,6 @@ import { config } from '../config';
 import { redis } from '../redis';
 import { logger } from '../datadog/logger';
 import { getCustomerState, ingestUsageEvents } from './client';
-import { retrieveSubscription } from './redis-storage';
-import { getTiers } from './subscription';
 import { MeterName } from '../../types/polar';
 import { validateMeterBalance, alertMeterInconsistency } from './validation';
 
@@ -40,58 +38,6 @@ export interface MeterBalance {
 }
 
 /**
- * Check if organization has unlimited access (Enterprise tier)
- * Requirements: 10.1, 10.2
- * 
- * @param linearOrgId - Linear organization ID
- * @returns True if organization has Enterprise tier with unlimited access
- */
-export async function isUnlimitedTier(linearOrgId: string): Promise<boolean> {
-  try {
-    logger.info('Checking if organization has unlimited tier', {
-      linearOrgId,
-    });
-
-    // Get subscription from Redis
-    const subscription = await retrieveSubscription(linearOrgId);
-
-    if (!subscription) {
-      logger.info('No subscription found, not unlimited', {
-        linearOrgId,
-      });
-      return false;
-    }
-
-    // Check if product ID matches Enterprise tier
-    const tiers = await getTiers();
-    const enterpriseTier = tiers.find((t) => t.id === 'enterprise');
-
-    if (!enterpriseTier) {
-      logger.error('Enterprise tier not found in tier definitions', new Error('Enterprise tier not configured'), {
-        linearOrgId,
-      });
-      return false;
-    }
-
-    const isUnlimited = subscription.productId === enterpriseTier.polarProductId;
-
-    logger.info('Unlimited tier check complete', {
-      linearOrgId,
-      isUnlimited,
-      productId: subscription.productId,
-    });
-
-    return isUnlimited;
-  } catch (error) {
-    logger.error('Failed to check unlimited tier status', error as Error, {
-      linearOrgId,
-    });
-    // Return false on error to enforce limits by default
-    return false;
-  }
-}
-
-/**
  * Check if organization has sufficient balance for a meter
  * Requirements: 2.1, 2.3, 9.3
  * 
@@ -109,29 +55,12 @@ export async function checkMeterBalance(
       meterName,
     });
 
-    // Check if organization has unlimited tier
-    const unlimited = await isUnlimitedTier(linearOrgId);
-
-    if (unlimited) {
-      logger.info('Organization has unlimited tier, skipping balance check', {
-        linearOrgId,
-        meterName,
-      });
-
-      return {
-        allowed: true,
-        balance: Infinity,
-        limit: null,
-        unlimited: true,
-      };
-    }
-
     // Get customer state from Polar
     const customerState = await getCustomerState(linearOrgId);
 
-    // If customer doesn't exist in Polar yet, apply free tier limits
+    // If customer doesn't exist in Polar yet, deny access
     if (!customerState) {
-      logger.info('Customer not found in Polar, applying free tier limits', {
+      logger.info('Customer not found in Polar, denying access', {
         linearOrgId,
         meterName,
       });
@@ -145,7 +74,6 @@ export async function checkMeterBalance(
     }
 
     // Find the specific meter by meterId
-    // We need to match against the configured meter IDs
     const meterIdToFind =
       meterName === 'job_descriptions'
         ? config.polar.meters.jobDescriptions
@@ -176,7 +104,6 @@ export async function checkMeterBalance(
     const allowed = balance > 0;
 
     // Validate meter balance is non-negative
-    // Requirements: 9.5
     const validationError = validateMeterBalance(balance, meterName);
     if (validationError) {
       alertMeterInconsistency(linearOrgId, meterName, balance);
@@ -325,35 +252,6 @@ export async function getMeterBalances(
       linearOrgId,
     });
 
-    // Check if organization has unlimited tier
-    const unlimited = await isUnlimitedTier(linearOrgId);
-
-    if (unlimited) {
-      logger.info('Organization has unlimited tier', {
-        linearOrgId,
-      });
-
-      // Return unlimited balances for both meters
-      return [
-        {
-          meterName: 'job_descriptions',
-          meterId: config.polar.meters.jobDescriptions,
-          consumedUnits: 0,
-          creditedUnits: 0,
-          balance: Infinity,
-          unlimited: true,
-        },
-        {
-          meterName: 'candidate_screenings',
-          meterId: config.polar.meters.candidateScreenings,
-          consumedUnits: 0,
-          creditedUnits: 0,
-          balance: Infinity,
-          unlimited: true,
-        },
-      ];
-    }
-
     // Get customer state from Polar
     const customerState = await getCustomerState(linearOrgId);
 
@@ -441,16 +339,6 @@ export async function deductMeterAtomic(
       meterName,
       key,
     });
-
-    // Check if unlimited tier first
-    const unlimited = await isUnlimitedTier(linearOrgId);
-    if (unlimited) {
-      logger.info('Unlimited tier, skipping atomic deduction', {
-        linearOrgId,
-        meterName,
-      });
-      return true;
-    }
 
     // Get current balance from Polar
     const balanceCheck = await checkMeterBalance(linearOrgId, meterName);

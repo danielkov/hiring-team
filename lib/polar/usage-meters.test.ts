@@ -1,8 +1,8 @@
 /**
  * Tests for usage meter tracking functions
- * 
- * These tests verify the core functionality of meter balance checking,
- * usage event recording, and unlimited tier detection.
+ *
+ * These tests verify the core functionality of meter balance checking
+ * and usage event recording.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -10,16 +10,11 @@ import {
   checkMeterBalance,
   recordUsageEvent,
   getMeterBalances,
-  isUnlimitedTier,
 } from './usage-meters';
 import * as client from './client';
-import * as redisStorage from './redis-storage';
-import * as subscription from './subscription';
 
 // Mock dependencies
 vi.mock('./client');
-vi.mock('./redis-storage');
-vi.mock('./subscription');
 vi.mock('../redis');
 vi.mock('../datadog/logger');
 vi.mock('../config', () => ({
@@ -45,122 +40,8 @@ describe('Usage Meters', () => {
     vi.clearAllMocks();
   });
 
-  describe('isUnlimitedTier', () => {
-    it('should return true for Enterprise tier', async () => {
-      const mockSubscription = {
-        linearOrgId: 'org-123',
-        polarCustomerId: 'cus-123',
-        productId: 'prod_enterprise',
-        status: 'active',
-        currentPeriodStart: new Date(),
-        currentPeriodEnd: new Date(),
-        cancelAtPeriodEnd: false,
-        updatedAt: new Date(),
-      };
-
-      vi.mocked(redisStorage.retrieveSubscription).mockResolvedValue(mockSubscription);
-      vi.mocked(subscription.getTiers).mockReturnValue([
-        {
-          id: 'enterprise',
-          name: 'Enterprise',
-          price: 19900,
-          currency: 'usd',
-          allowances: { jobDescriptions: null, candidateScreenings: null },
-          polarProductId: 'prod_enterprise',
-          description: 'Enterprise tier',
-          features: [],
-        },
-      ] as any);
-
-      const result = await isUnlimitedTier('org-123');
-      expect(result).toBe(true);
-    });
-
-    it('should return false for non-Enterprise tier', async () => {
-      const mockSubscription = {
-        linearOrgId: 'org-123',
-        polarCustomerId: 'cus-123',
-        productId: 'prod_pro',
-        status: 'active',
-        currentPeriodStart: new Date(),
-        currentPeriodEnd: new Date(),
-        cancelAtPeriodEnd: false,
-        updatedAt: new Date(),
-      };
-
-      vi.mocked(redisStorage.retrieveSubscription).mockResolvedValue(mockSubscription);
-      vi.mocked(subscription.getTiers).mockReturnValue([
-        {
-          id: 'enterprise',
-          name: 'Enterprise',
-          price: 19900,
-          currency: 'usd',
-          allowances: { jobDescriptions: null, candidateScreenings: null },
-          polarProductId: 'prod_enterprise',
-          description: 'Enterprise tier',
-          features: [],
-        },
-      ] as any);
-
-      const result = await isUnlimitedTier('org-123');
-      expect(result).toBe(false);
-    });
-
-    it('should return false when no subscription exists', async () => {
-      vi.mocked(redisStorage.retrieveSubscription).mockResolvedValue(null);
-
-      const result = await isUnlimitedTier('org-123');
-      expect(result).toBe(false);
-    });
-  });
-
   describe('checkMeterBalance', () => {
-    it('should return unlimited for Enterprise tier', async () => {
-      const mockSubscription = {
-        linearOrgId: 'org-123',
-        polarCustomerId: 'cus-123',
-        productId: 'prod_enterprise',
-        status: 'active',
-        currentPeriodStart: new Date(),
-        currentPeriodEnd: new Date(),
-        cancelAtPeriodEnd: false,
-        updatedAt: new Date(),
-      };
-
-      vi.mocked(redisStorage.retrieveSubscription).mockResolvedValue(mockSubscription);
-      vi.mocked(subscription.getTiers).mockReturnValue([
-        {
-          id: 'enterprise',
-          name: 'Enterprise',
-          price: 19900,
-          currency: 'usd',
-          allowances: { jobDescriptions: null, candidateScreenings: null },
-          polarProductId: 'prod_enterprise',
-          description: 'Enterprise tier',
-          features: [],
-        },
-      ] as any);
-
-      const result = await checkMeterBalance('org-123', 'job_descriptions');
-
-      expect(result.allowed).toBe(true);
-      expect(result.unlimited).toBe(true);
-      expect(result.balance).toBe(Infinity);
-      expect(result.limit).toBe(null);
-    });
-
-    it('should check balance for non-Enterprise tier', async () => {
-      const mockSubscription = {
-        linearOrgId: 'org-123',
-        polarCustomerId: 'cus-123',
-        productId: 'prod_pro',
-        status: 'active',
-        currentPeriodStart: new Date(),
-        currentPeriodEnd: new Date(),
-        cancelAtPeriodEnd: false,
-        updatedAt: new Date(),
-      };
-
+    it('should return meter balance from customer state', async () => {
       const mockCustomerState = {
         activeMeters: [
           {
@@ -175,19 +56,6 @@ describe('Usage Meters', () => {
         ],
       };
 
-      vi.mocked(redisStorage.retrieveSubscription).mockResolvedValue(mockSubscription);
-      vi.mocked(subscription.getTiers).mockReturnValue([
-        {
-          id: 'enterprise',
-          name: 'Enterprise',
-          price: 19900,
-          currency: 'usd',
-          allowances: { jobDescriptions: null, candidateScreenings: null },
-          polarProductId: 'prod_enterprise',
-          description: 'Enterprise tier',
-          features: [],
-        },
-      ] as any);
       vi.mocked(client.getCustomerState).mockResolvedValue(mockCustomerState as any);
 
       const result = await checkMeterBalance('org-123', 'job_descriptions');
@@ -199,17 +67,6 @@ describe('Usage Meters', () => {
     });
 
     it('should return not allowed when balance is zero', async () => {
-      const mockSubscription = {
-        linearOrgId: 'org-123',
-        polarCustomerId: 'cus-123',
-        productId: 'prod_pro',
-        status: 'active',
-        currentPeriodStart: new Date(),
-        currentPeriodEnd: new Date(),
-        cancelAtPeriodEnd: false,
-        updatedAt: new Date(),
-      };
-
       const mockCustomerState = {
         activeMeters: [
           {
@@ -224,19 +81,6 @@ describe('Usage Meters', () => {
         ],
       };
 
-      vi.mocked(redisStorage.retrieveSubscription).mockResolvedValue(mockSubscription);
-      vi.mocked(subscription.getTiers).mockReturnValue([
-        {
-          id: 'enterprise',
-          name: 'Enterprise',
-          price: 19900,
-          currency: 'usd',
-          allowances: { jobDescriptions: null, candidateScreenings: null },
-          polarProductId: 'prod_enterprise',
-          description: 'Enterprise tier',
-          features: [],
-        },
-      ] as any);
       vi.mocked(client.getCustomerState).mockResolvedValue(mockCustomerState as any);
 
       const result = await checkMeterBalance('org-123', 'job_descriptions');
@@ -315,53 +159,7 @@ describe('Usage Meters', () => {
   });
 
   describe('getMeterBalances', () => {
-    it('should return unlimited balances for Enterprise tier', async () => {
-      const mockSubscription = {
-        linearOrgId: 'org-123',
-        polarCustomerId: 'cus-123',
-        productId: 'prod_enterprise',
-        status: 'active',
-        currentPeriodStart: new Date(),
-        currentPeriodEnd: new Date(),
-        cancelAtPeriodEnd: false,
-        updatedAt: new Date(),
-      };
-
-      vi.mocked(redisStorage.retrieveSubscription).mockResolvedValue(mockSubscription);
-      vi.mocked(subscription.getTiers).mockReturnValue([
-        {
-          id: 'enterprise',
-          name: 'Enterprise',
-          price: 19900,
-          currency: 'usd',
-          allowances: { jobDescriptions: null, candidateScreenings: null },
-          polarProductId: 'prod_enterprise',
-          description: 'Enterprise tier',
-          features: [],
-        },
-      ] as any);
-
-      const result = await getMeterBalances('org-123');
-
-      expect(result).toHaveLength(2);
-      expect(result[0].unlimited).toBe(true);
-      expect(result[1].unlimited).toBe(true);
-      expect(result[0].balance).toBe(Infinity);
-      expect(result[1].balance).toBe(Infinity);
-    });
-
-    it('should return actual balances for non-Enterprise tier', async () => {
-      const mockSubscription = {
-        linearOrgId: 'org-123',
-        polarCustomerId: 'cus-123',
-        productId: 'prod_pro',
-        status: 'active',
-        currentPeriodStart: new Date(),
-        currentPeriodEnd: new Date(),
-        cancelAtPeriodEnd: false,
-        updatedAt: new Date(),
-      };
-
+    it('should return actual balances from customer state', async () => {
       const mockCustomerState = {
         activeMeters: [
           {
@@ -385,19 +183,6 @@ describe('Usage Meters', () => {
         ],
       };
 
-      vi.mocked(redisStorage.retrieveSubscription).mockResolvedValue(mockSubscription);
-      vi.mocked(subscription.getTiers).mockReturnValue([
-        {
-          id: 'enterprise',
-          name: 'Enterprise',
-          price: 19900,
-          currency: 'usd',
-          allowances: { jobDescriptions: null, candidateScreenings: null },
-          polarProductId: 'prod_enterprise',
-          description: 'Enterprise tier',
-          features: [],
-        },
-      ] as any);
       vi.mocked(client.getCustomerState).mockResolvedValue(mockCustomerState as any);
 
       const result = await getMeterBalances('org-123');
