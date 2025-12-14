@@ -11,7 +11,6 @@
  */
 
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { submitApplication } from '@/lib/actions/application';
 import { ValidationError } from '@/types';
 import { Upload, X, FileText, CheckCircle2 } from 'lucide-react';
@@ -263,26 +262,28 @@ export function ApplicationForm({ jobId, linearOrg, onSuccess }: ApplicationForm
 
   if (submitSuccess) {
     return (
-      <Card className="px-6">
-        <div className="text-center py-8">
-          <CheckCircle2 className="w-16 h-16 text-green-600 mx-auto mb-4" />
-          <h3 className="text-2xl font-semibold text-gray-900 mb-2">
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 sm:p-12">
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-6">
+            <CheckCircle2 className="w-10 h-10 text-green-600" />
+          </div>
+          <h3 className="text-3xl font-bold text-gray-900 mb-3">
             Application Submitted!
           </h3>
-          <p className="text-gray-600">
+          <p className="text-lg text-gray-600">
             Thank you for your application. We'll review it and get back to you soon.
           </p>
         </div>
-      </Card>
+      </div>
     );
   }
 
   return (
-    <Card className="px-6">
+    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 sm:p-10">
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Name field */}
         <div>
-          <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="name" className="block text-sm font-semibold text-gray-900 mb-2">
             Full Name <span className="text-red-500">*</span>
           </label>
           <input
@@ -291,19 +292,19 @@ export function ApplicationForm({ jobId, linearOrg, onSuccess }: ApplicationForm
             value={name}
             onChange={(e) => handleNameChange(e.target.value)}
             onBlur={() => handleBlur('name')}
-            className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              errors.name && touched.name ? 'border-red-500' : 'border-gray-300'
+            className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${
+              errors.name && touched.name ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:border-gray-300'
             }`}
             placeholder="John Doe"
           />
           {errors.name && touched.name && (
-            <p className="mt-1 text-sm text-red-600">{errors.name}</p>
+            <p className="mt-2 text-sm text-red-600 font-medium">{errors.name}</p>
           )}
         </div>
 
         {/* Email field */}
         <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="email" className="block text-sm font-semibold text-gray-900 mb-2">
             Email Address <span className="text-red-500">*</span>
           </label>
           <input
@@ -312,31 +313,31 @@ export function ApplicationForm({ jobId, linearOrg, onSuccess }: ApplicationForm
             value={email}
             onChange={(e) => handleEmailChange(e.target.value)}
             onBlur={() => handleBlur('email')}
-            className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              errors.email && touched.email ? 'border-red-500' : 'border-gray-300'
+            className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${
+              errors.email && touched.email ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:border-gray-300'
             }`}
             placeholder="john@example.com"
           />
           {errors.email && touched.email && (
-            <p className="mt-1 text-sm text-red-600">{errors.email}</p>
+            <p className="mt-2 text-sm text-red-600 font-medium">{errors.email}</p>
           )}
         </div>
 
         {/* CV upload */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-semibold text-gray-900 mb-2">
             CV/Resume <span className="text-red-500">*</span>
           </label>
           <div
             onDragOver={(e) => handleDragOver(e, 'cv')}
             onDragLeave={(e) => handleDragLeave(e, 'cv')}
             onDrop={(e) => handleDrop(e, 'cv')}
-            className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+            className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${
               isDraggingCv
                 ? 'border-blue-500 bg-blue-50'
                 : errors.cv && touched.cv
                 ? 'border-red-500 bg-red-50'
-                : 'border-gray-300 hover:border-gray-400'
+                : 'border-gray-300 hover:border-blue-300 hover:bg-gray-50'
             }`}
           >
             {cvFile ? (
@@ -353,24 +354,25 @@ export function ApplicationForm({ jobId, linearOrg, onSuccess }: ApplicationForm
                 <button
                   type="button"
                   onClick={() => removeFile('cv')}
-                  className="p-1 hover:bg-gray-100 rounded-full"
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5 text-gray-500" />
                 </button>
               </div>
             ) : (
               <>
-                <Upload className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-sm text-gray-600 mb-2">
+                <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-base font-medium text-gray-700 mb-2">
                   Drag and drop your CV here, or click to browse
                 </p>
-                <p className="text-xs text-gray-500 mb-4">
+                <p className="text-sm text-gray-500 mb-5">
                   PDF, DOC, or DOCX (max 10MB)
                 </p>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => cvInputRef.current?.click()}
+                  className="rounded-lg"
                 >
                   Choose File
                 </Button>
@@ -385,25 +387,25 @@ export function ApplicationForm({ jobId, linearOrg, onSuccess }: ApplicationForm
             />
           </div>
           {errors.cv && touched.cv && (
-            <p className="mt-1 text-sm text-red-600">{errors.cv}</p>
+            <p className="mt-2 text-sm text-red-600 font-medium">{errors.cv}</p>
           )}
         </div>
 
         {/* Cover Letter upload (optional) */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Cover Letter <span className="text-gray-500 text-xs">(Optional)</span>
+          <label className="block text-sm font-semibold text-gray-900 mb-2">
+            Cover Letter <span className="text-gray-500 text-xs font-normal">(Optional)</span>
           </label>
           <div
             onDragOver={(e) => handleDragOver(e, 'coverLetter')}
             onDragLeave={(e) => handleDragLeave(e, 'coverLetter')}
             onDrop={(e) => handleDrop(e, 'coverLetter')}
-            className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+            className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${
               isDraggingCoverLetter
                 ? 'border-blue-500 bg-blue-50'
                 : errors.coverLetter
                 ? 'border-red-500 bg-red-50'
-                : 'border-gray-300 hover:border-gray-400'
+                : 'border-gray-300 hover:border-blue-300 hover:bg-gray-50'
             }`}
           >
             {coverLetterFile ? (
@@ -420,24 +422,25 @@ export function ApplicationForm({ jobId, linearOrg, onSuccess }: ApplicationForm
                 <button
                   type="button"
                   onClick={() => removeFile('coverLetter')}
-                  className="p-1 hover:bg-gray-100 rounded-full"
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5 text-gray-500" />
                 </button>
               </div>
             ) : (
               <>
-                <Upload className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-sm text-gray-600 mb-2">
+                <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-base font-medium text-gray-700 mb-2">
                   Drag and drop your cover letter here, or click to browse
                 </p>
-                <p className="text-xs text-gray-500 mb-4">
+                <p className="text-sm text-gray-500 mb-5">
                   PDF, DOC, or DOCX (max 10MB)
                 </p>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => coverLetterInputRef.current?.click()}
+                  className="rounded-lg"
                 >
                   Choose File
                 </Button>
@@ -452,14 +455,14 @@ export function ApplicationForm({ jobId, linearOrg, onSuccess }: ApplicationForm
             />
           </div>
           {errors.coverLetter && (
-            <p className="mt-1 text-sm text-red-600">{errors.coverLetter}</p>
+            <p className="mt-2 text-sm text-red-600 font-medium">{errors.coverLetter}</p>
           )}
         </div>
 
         {/* Submit error */}
         {errors.submit && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-sm text-red-800">{errors.submit}</p>
+          <div className="bg-red-50 border border-red-200 rounded-xl p-5">
+            <p className="text-sm text-red-800 font-medium">{errors.submit}</p>
           </div>
         )}
 
@@ -467,12 +470,11 @@ export function ApplicationForm({ jobId, linearOrg, onSuccess }: ApplicationForm
         <Button
           type="submit"
           disabled={isSubmitting}
-          className="w-full"
-          size="lg"
+          className="w-full rounded-xl text-base font-semibold py-6 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-md hover:shadow-lg transition-all"
         >
           {isSubmitting ? 'Submitting...' : 'Submit Application'}
         </Button>
       </form>
-    </Card>
+    </div>
   );
 }

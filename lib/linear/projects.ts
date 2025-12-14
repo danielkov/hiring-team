@@ -243,6 +243,69 @@ export async function getJobListingByIdForOrg(linearOrg: string, projectId: stri
 }
 
 /**
+ * Organization info from Linear
+ */
+export interface LinearOrgInfo {
+  name: string;
+  logoUrl?: string;
+}
+
+/**
+ * Get organization info for a specific Linear organization
+ * This is used for the public job board and uses the org config from Redis
+ */
+export async function getOrgInfo(linearOrg: string): Promise<LinearOrgInfo | null> {
+  console.log('[getOrgInfo] Starting for org:', linearOrg);
+
+  // Get the org config from Redis
+  let config = await getOrgConfig(linearOrg);
+
+  if (!config) {
+    console.error('[getOrgInfo] No config found');
+    return null;
+  }
+
+  // Check if token is expired and refresh if needed
+  const isExpired = Date.now() >= config.expiresAt;
+
+  if (isExpired) {
+    const { refreshLinearToken } = await import('./oauth');
+    const { storeOrgConfig } = await import('../redis');
+
+    try {
+      const { accessToken, refreshToken, expiresIn } = await refreshLinearToken(config.refreshToken);
+      const expiresAt = Date.now() + expiresIn * 1000;
+
+      config = {
+        ...config,
+        accessToken,
+        refreshToken,
+        expiresAt,
+      };
+
+      await storeOrgConfig(linearOrg, config);
+    } catch (error) {
+      console.error('[getOrgInfo] Failed to refresh token:', error);
+      return null;
+    }
+  }
+
+  // Create Linear client with org token
+  const client = createLinearClient(config.accessToken);
+
+  try {
+    const organization = await client.organization;
+    return {
+      name: organization.name,
+      logoUrl: organization.logoUrl || undefined,
+    };
+  } catch (error) {
+    console.error('[getOrgInfo] Failed to fetch organization:', error);
+    return null;
+  }
+}
+
+/**
  * Get published jobs for a specific Linear organization
  * This is used for the public job board and uses the org config from Redis
  */
