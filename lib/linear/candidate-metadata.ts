@@ -1,96 +1,73 @@
 /**
- * Linear Issue Candidate Metadata Management
- * 
- * Handles storing and retrieving structured candidate metadata from Linear issue descriptions
- * using HTML comments to avoid parsing fragile markdown formatting.
+ * Linear Issue Candidate Information Extraction
+ *
+ * Handles extracting candidate information from Linear issue descriptions
+ * by parsing markdown formatting.
  */
-
-import { randomUUID } from 'crypto';
 
 /**
- * Candidate metadata stored in Linear issues
+ * Candidate information extracted from Linear issues
  */
-export interface CandidateMetadata {
-  email: string;
+export interface CandidateInfo {
   name: string;
-  threadId: string; // Stable ID for email threading
-  createdAt: string; // ISO timestamp
-  version: number; // For future schema migrations
+  email: string;
 }
 
 /**
- * Generate metadata for a new candidate issue
+ * Extract candidate information from issue description
+ * Parses markdown-formatted fields and handles Linear's markdown link format
+ *
+ * @param issueDescription - The issue description text
+ * @returns Object with name and email, or null if not found
  */
-export function generateCandidateMetadata(name: string, email: string): CandidateMetadata {
-  return {
-    email,
-    name,
-    threadId: randomUUID(),
-    createdAt: new Date().toISOString(),
-    version: 1,
-  };
-}
-
-/**
- * Embed metadata as HTML comment in issue description
- */
-export function embedCandidateMetadata(description: string, metadata: CandidateMetadata): string {
-  const metadataComment = `<!-- candidate-metadata:${JSON.stringify(metadata)} -->`;
-  return `${metadataComment}\n\n${description}`;
-}
-
-/**
- * Extract candidate metadata from issue description
- */
-export function extractCandidateMetadata(description: string): CandidateMetadata | null {
-  if (!description) {
+export function extractCandidateInfo(issueDescription: string): CandidateInfo | null {
+  if (!issueDescription) {
     return null;
   }
 
   try {
-    // Look for candidate metadata comment pattern
-    const metadataMatch = description.match(/<!-- candidate-metadata:(.+?) -->/);
-    
-    if (!metadataMatch || !metadataMatch[1]) {
+    let name = 'Candidate';
+    let email: string | null = null;
+
+    // Extract name
+    const nameMatch = issueDescription.match(/\*?\*?Name:\*?\*?\s*([^\n]+)/i);
+    if (nameMatch && nameMatch[1]) {
+      name = nameMatch[1].trim();
+    }
+
+    // Extract email
+    const emailMatch = issueDescription.match(/\*?\*?Email:\*?\*?\s*([^\s\n]+)/i);
+
+    if (emailMatch && emailMatch[1]) {
+      let emailCandidate = emailMatch[1].trim();
+
+      // Handle markdown link format: [email@example.com](mailto:email@example.com)
+      const markdownLinkMatch = emailCandidate.match(/\[([^\]]+@[^\]]+)\]/);
+      if (markdownLinkMatch) {
+        emailCandidate = markdownLinkMatch[1];
+      }
+
+      // Validate it's a proper email format
+      const emailPatternMatch = emailCandidate.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+      if (emailPatternMatch) {
+        email = emailPatternMatch[1];
+      }
+    }
+
+    // Fallback: look for any email-like pattern in the entire description
+    if (!email) {
+      const genericEmailMatch = issueDescription.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+      if (genericEmailMatch && genericEmailMatch[1]) {
+        email = genericEmailMatch[1].trim();
+      }
+    }
+
+    if (!email) {
       return null;
     }
 
-    const metadata = JSON.parse(metadataMatch[1]) as CandidateMetadata;
-    
-    // Validate required fields
-    if (!metadata.email || !metadata.name || !metadata.threadId) {
-      return null;
-    }
-
-    return metadata;
+    return { name, email };
   } catch (error) {
-    // Invalid JSON or parsing error
     return null;
   }
-}
-
-/**
- * Update candidate metadata in existing issue description
- */
-export function updateCandidateMetadata(description: string, newMetadata: Partial<CandidateMetadata>): string {
-  const existingMetadata = extractCandidateMetadata(description);
-  
-  if (!existingMetadata) {
-    throw new Error('No existing candidate metadata found in description');
-  }
-
-  const updatedMetadata = { ...existingMetadata, ...newMetadata };
-  
-  // Remove old metadata comment
-  const descriptionWithoutMetadata = description.replace(/<!-- candidate-metadata:.+? -->\n?\n?/, '');
-  
-  // Add updated metadata
-  return embedCandidateMetadata(descriptionWithoutMetadata, updatedMetadata);
-}
-
-/**
- * Get clean description without candidate metadata comment
- */
-export function getCleanDescription(description: string): string {
-  return description.replace(/<!-- candidate-metadata:.+? -->\n?\n?/, '').trim();
 }

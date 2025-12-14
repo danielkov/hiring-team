@@ -10,15 +10,15 @@
 import { createLinearClient } from './client';
 import { checkEmailCommunicationBenefit } from '@/lib/polar/benefits';
 import { sendCommentEmail } from '@/lib/resend/templates';
-import { 
-  generateReplyToAddress, 
-  getLastMessageId, 
-  buildThreadReferences 
+import {
+  generateReplyToAddress,
+  getLastMessageId,
+  buildThreadReferences
 } from '@/lib/resend/email-threading';
 import { addIssueComment, addThreadedComment, addCommentReaction } from './state-management';
 import { withRetry, isRetryableError } from '../utils/retry';
 import { logger } from '@/lib/datadog/logger';
-import { extractCandidateMetadata } from './candidate-metadata';
+import { extractCandidateInfo } from './candidate-metadata';
 
 /**
  * Check if a comment is a system message
@@ -62,64 +62,19 @@ function isSystemComment(commentBody: string, userId?: string): boolean {
 }
 
 /**
- * Extract candidate metadata (name and email) from issue description with fallback parsing
- * 
+ * Extract candidate information (name and email) from issue description
+ *
  * @param issueDescription - The issue description text
  * @returns Object with name and email (email can be null if not found)
  */
 function extractCandidateMetadataWithFallback(issueDescription: string): { name: string; email: string | null } {
-  // First try to extract from metadata
-  const metadata = extractCandidateMetadata(issueDescription);
-  if (metadata && metadata.name && metadata.email) {
-    return metadata;
+  const candidateInfo = extractCandidateInfo(issueDescription);
+
+  if (candidateInfo) {
+    return candidateInfo;
   }
-  
-  // Fallback to parsing markdown for backward compatibility
-  let name = 'Candidate';
-  let email: string | null = null;
-  
-  // Extract name if not found in metadata
-  if (!metadata?.name) {
-    const nameMatch = issueDescription.match(/Name:\s*([^\n]+)/i);
-    if (nameMatch && nameMatch[1]) {
-      name = nameMatch[1].trim();
-    }
-  } else {
-    name = metadata.name;
-  }
-  
-  // Extract email if not found in metadata
-  if (!metadata?.email) {
-    const emailMatch = issueDescription.match(/\*?\*?Email:\*?\*?\s*([^\s\n]+)/i);
-    
-    if (emailMatch && emailMatch[1]) {
-      let emailCandidate = emailMatch[1].trim();
-      
-      // Handle markdown link format: [email@example.com](mailto:email@example.com)
-      const markdownLinkMatch = emailCandidate.match(/\[([^\]]+@[^\]]+)\]/);
-      if (markdownLinkMatch) {
-        emailCandidate = markdownLinkMatch[1];
-      }
-      
-      // Validate it's a proper email format
-      const emailPatternMatch = emailCandidate.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
-      if (emailPatternMatch) {
-        email = emailPatternMatch[1];
-      }
-    }
-    
-    // Fallback: look for any email-like pattern in the entire description
-    if (!email) {
-      const genericEmailMatch = issueDescription.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
-      if (genericEmailMatch && genericEmailMatch[1]) {
-        email = genericEmailMatch[1].trim();
-      }
-    }
-  } else {
-    email = metadata.email;
-  }
-  
-  return { name, email };
+
+  return { name: 'Candidate', email: null };
 }
 
 /**

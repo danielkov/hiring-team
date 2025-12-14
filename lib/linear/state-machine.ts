@@ -8,18 +8,18 @@
 import { createLinearClient } from './client';
 import { parseCV } from './cv-parser';
 import { screenCandidate } from '../cerebras/candidate-screening';
-import { 
-  determineIssueState, 
-  generateReasoningComment, 
-  addIssueComment 
+import {
+  determineIssueState,
+  generateReasoningComment,
+  addIssueComment
 } from './state-management';
 import { checkMeterBalance } from '@/lib/polar/usage-meters';
 import { checkEmailCommunicationBenefit, checkAIScreeningBenefit } from '@/lib/polar/benefits';
 import { sendConfirmationEmail, sendRejectionEmail, sendScreeningInvitationEmail } from '@/lib/resend/templates';
-import { 
-  generateReplyToAddress, 
-  getLastMessageId, 
-  buildThreadReferences 
+import {
+  generateReplyToAddress,
+  getLastMessageId,
+  buildThreadReferences
 } from '@/lib/resend/email-threading';
 import { generateConversationPointers } from '@/lib/cerebras/conversation-pointers';
 import { createScreeningSession } from '@/lib/elevenlabs/session-secrets';
@@ -27,7 +27,7 @@ import { config } from '@/lib/config';
 import { withRetry, isRetryableError } from '../utils/retry';
 import { logger } from '@/lib/datadog/logger';
 import { Issue, Project } from '@linear/sdk';
-import { extractCandidateMetadata } from './candidate-metadata';
+import { extractCandidateInfo as extractCandidateInfoFromMetadata } from './candidate-metadata';
 
 /**
  * State machine labels
@@ -1118,53 +1118,8 @@ async function ensureLabel(
 }
 
 /**
- * Extract candidate information from issue metadata (preferred) or fallback to parsing description
+ * Extract candidate information from issue description
  */
 function extractCandidateInfo(issueDescription: string): { name: string; email: string } | null {
-  try {
-    // First try to extract from metadata
-    const metadata = extractCandidateMetadata(issueDescription);
-    if (metadata) {
-      return {
-        name: metadata.name,
-        email: metadata.email,
-      };
-    }
-    
-    // Fallback to parsing markdown for backward compatibility
-    logger.warn('No candidate metadata found, falling back to markdown parsing');
-    
-    const nameMatch = issueDescription.match(/\*\*Name:\*\*\s*(.+)/);
-    const emailMatch = issueDescription.match(/\*\*Email:\*\*\s*(.+)/);
-    
-    if (!nameMatch || !emailMatch) {
-      logger.warn('Could not extract candidate info from issue description', {
-        hasNameMatch: !!nameMatch,
-        hasEmailMatch: !!emailMatch,
-      });
-      return null;
-    }
-    
-    let email = emailMatch[1].trim();
-    
-    // Handle markdown link format: [email@example.com](mailto:email@example.com)
-    const markdownLinkMatch = email.match(/\[([^\]]+@[^\]]+)\]/);
-    if (markdownLinkMatch) {
-      email = markdownLinkMatch[1];
-    }
-    
-    // Fallback: extract email pattern from any text
-    const emailPatternMatch = email.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
-    if (emailPatternMatch) {
-      email = emailPatternMatch[1];
-    }
-    
-    return {
-      name: nameMatch[1].trim(),
-      email: email,
-    };
-  } catch (error) {
-    logger.error('Error extracting candidate info', error instanceof Error ? error : new Error(String(error)));
-    return null;
-  }
+  return extractCandidateInfoFromMetadata(issueDescription);
 }
