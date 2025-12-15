@@ -106,7 +106,7 @@ export async function handleIssueUpdate(
   // This happens before document processing
   if (labelNames.includes(STATE_LABELS.NEW)) {
     await sendConfirmationEmailIfEnabled(issue, project, linearOrgId, linearOrgSlug, linearAccessToken);
-    await processDocuments(client, issue);
+    await processDocuments(client, issue, linearAccessToken);
     return;
   }
 
@@ -278,6 +278,7 @@ async function sendConfirmationEmailIfEnabled(
 async function processDocuments(
   client: ReturnType<typeof createLinearClient>,
   issue: Issue,
+  linearAccessToken: string
 ): Promise<void> {
   try {
     logger.info('Processing documents for issue', { issueId: issue.id });
@@ -299,7 +300,11 @@ async function processDocuments(
     // Parse CV
     if (cvAttachment && cvAttachment.url) {
       try {
-        const response = await fetch(cvAttachment.url);
+        const response = await fetch(cvAttachment.url, {
+          headers: {
+            'Authorization': `Bearer ${linearAccessToken}`
+          }
+        });
         if (!response.ok) {
           throw new Error(`Failed to fetch CV: ${response.statusText}`);
         }
@@ -318,7 +323,11 @@ async function processDocuments(
     // Parse cover letter
     if (coverLetterAttachment && coverLetterAttachment.url) {
       try {
-        const response = await fetch(coverLetterAttachment.url);
+        const response = await fetch(coverLetterAttachment.url, {
+          headers: {
+            'Authorization': `Bearer ${linearAccessToken}`
+          }
+        });
         if (!response.ok) {
           throw new Error(`Failed to fetch cover letter: ${response.statusText}`);
         }
@@ -334,27 +343,42 @@ async function processDocuments(
       }
     }
     
+    // Only proceed if we successfully parsed content
+    if (!parsedContent || parsedContent.trim().length === 0) {
+      logger.error('No CV or cover letter content was parsed, will not mark as processed', undefined, {
+        issueId: issue.id,
+        hasCvAttachment: !!cvAttachment,
+        hasCoverLetterAttachment: !!coverLetterAttachment,
+      });
+
+      // Add a comment to notify about the missing documents
+      await addIssueComment(
+        linearAccessToken,
+        issue.id,
+        '*Failed to process application documents. Please ensure CV and/or cover letter are attached as PDFs.*'
+      );
+      return;
+    }
+
     // Prepare the single update operation
     const currentDescription = issue.description || '';
-    const updatedDescription = parsedContent 
-      ? `${currentDescription}\n\n---\n\n${parsedContent}`
-      : currentDescription;
-    
+    const updatedDescription = `${currentDescription}\n\n---\n\n${parsedContent}`;
+
     // Get current labels and prepare new label set
     const labels = await issue.labels();
     const currentLabelIds = labels.nodes
       .filter((l) => l.name !== STATE_LABELS.NEW)
       .map((l) => l.id);
-    
+
     // Ensure "Processed" label exists
     const processedLabelId = await ensureLabel(client, STATE_LABELS.PROCESSED);
-    
+
     // SINGLE UPDATE: Update description and labels in one operation
     await client.updateIssue(issue.id, {
       description: updatedDescription,
       labelIds: [...currentLabelIds, processedLabelId],
     });
-    
+
     logger.info('Document processing completed', { issueId: issue.id });
   } catch (error) {
     logger.error('Error processing documents', error instanceof Error ? error : new Error(String(error)), {
