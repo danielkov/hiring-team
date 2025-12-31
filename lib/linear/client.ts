@@ -1,17 +1,16 @@
 /**
  * Linear SDK Client
- * 
- * Provides authenticated Linear SDK client instances using WorkOS metadata
+ *
+ * Provides authenticated Linear SDK client instances using Redis for tokens
  */
 
 import { LinearClient } from '@linear/sdk';
-import { getLinearTokens, storeLinearTokens, isLinearTokenExpired } from './metadata';
-import { refreshLinearToken } from './oauth';
-import { withRetry, isRetryableError } from '../utils/retry';
+import { getLinearOrgSlug } from './metadata';
+import { getOrgConfig } from '../redis';
 
 /**
  * Get authenticated Linear client for current user
- * Automatically refreshes token if expired
+ * Tokens are fetched from Redis (which handles auto-refresh)
  */
 export async function getLinearClient(): Promise<LinearClient> {
   const { withAuth } = await import('@workos-inc/authkit-nextjs');
@@ -21,55 +20,22 @@ export async function getLinearClient(): Promise<LinearClient> {
     throw new Error('No active session');
   }
 
-  // Get Linear tokens from WorkOS metadata
-  const tokens = await getLinearTokens(user.id);
+  // Get org slug from WorkOS metadata
+  const orgSlug = await getLinearOrgSlug(user.id);
 
-  if (!tokens) {
+  if (!orgSlug) {
     throw new Error('Linear not connected. Please authorize Linear integration.');
   }
 
-  // Check if token is expired and refresh if needed
-  if (isLinearTokenExpired(tokens)) {
-    try {
-      // Retry token refresh with exponential backoff
-      const { accessToken, refreshToken, expiresIn } = await withRetry(
-        () => refreshLinearToken(tokens.refreshToken),
-        {
-          maxAttempts: 3,
-          initialDelayMs: 1000,
-          shouldRetry: isRetryableError,
-        }
-      );
+  // Get tokens from Redis (auto-refreshes if expired)
+  const orgConfig = await getOrgConfig(orgSlug);
 
-      // Calculate new expiry
-      const expiresAt = Date.now() + expiresIn * 1000;
-
-      const newTokens = {
-        accessToken,
-        refreshToken,
-        expiresAt,
-      };
-
-      // Update WorkOS metadata with new tokens
-      await storeLinearTokens(user.id, newTokens);
-
-      // Store organization config in Redis
-      const { storeOrgConfigInRedis } = await import('./metadata');
-      await storeOrgConfigInRedis(user.id, newTokens);
-
-      // Return client with new token
-      return new LinearClient({
-        accessToken,
-      });
-    } catch (error) {
-      console.error('Failed to refresh Linear token:', error);
-      throw new Error('Failed to refresh Linear authentication. Please re-authorize.');
-    }
+  if (!orgConfig) {
+    throw new Error('Linear organization config not found. Please re-authorize Linear integration.');
   }
 
-  // Return client with current token
   return new LinearClient({
-    accessToken: tokens.accessToken,
+    accessToken: orgConfig.accessToken,
   });
 }
 
@@ -94,9 +60,9 @@ export async function hasLinearConnected(): Promise<boolean> {
     const { withAuth } = await import('@workos-inc/authkit-nextjs');
     const { user } = await withAuth();
     if (!user) return false;
-    
-    const tokens = await getLinearTokens(user.id);
-    return tokens !== null;
+
+    const orgSlug = await getLinearOrgSlug(user.id);
+    return orgSlug !== null;
   } catch {
     return false;
   }

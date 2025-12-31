@@ -23,9 +23,7 @@ export class InsufficientBalanceError extends Error {
 export interface UserSession {
   userId: string;
   workosId: string;
-  linearAccessToken: string;
-  linearRefreshToken: string;
-  linearTokenExpiry: Date;
+  linearOrgSlug: string | null;
   atsContainerInitiativeId: string | null;
 }
 

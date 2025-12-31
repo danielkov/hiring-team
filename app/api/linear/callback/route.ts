@@ -1,11 +1,11 @@
 /**
  * Linear OAuth Callback Handler
- * Processes authorization code and stores tokens in WorkOS user metadata
+ * Processes authorization code and stores tokens in Redis, org slug in WorkOS metadata
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { exchangeCodeForToken } from '@/lib/linear/oauth';
-import { storeLinearTokens, storeOrgConfigInRedis } from '@/lib/linear/metadata';
+import { storeOrgConfigInRedis } from '@/lib/linear/metadata';
 import { config } from '@/lib/config';
 import { withAuth } from '@workos-inc/authkit-nextjs';
 import { emitAuthenticationFailure } from '@/lib/datadog/events';
@@ -65,10 +65,7 @@ export async function GET(request: NextRequest) {
       expiresAt,
     };
 
-    // Store tokens in WorkOS user metadata
-    await storeLinearTokens(user.id, tokens);
-
-    // Store organization config in Redis
+    // Store organization config in Redis and org slug in WorkOS metadata
     await storeOrgConfigInRedis(user.id, tokens);
 
     // Redirect to original destination or dashboard

@@ -4,7 +4,8 @@
  * Server Actions for Linear Integration
  */
 
-import { getLinearTokens, removeLinearTokens } from './metadata';
+import { getLinearOrgSlug, removeLinearOrgSlug } from './metadata';
+import { getOrgConfig, deleteOrgConfig } from '../redis';
 import { revokeLinearToken } from './oauth';
 
 /**
@@ -13,13 +14,13 @@ import { revokeLinearToken } from './oauth';
 export async function getLinearConnectionStatus() {
   const { withAuth } = await import('@workos-inc/authkit-nextjs');
   const { user } = await withAuth();
-  
+
   if (!user) {
     throw new Error('Unauthorized');
   }
 
-  const tokens = await getLinearTokens(user.id);
-  return { connected: tokens !== null };
+  const orgSlug = await getLinearOrgSlug(user.id);
+  return { connected: orgSlug !== null };
 }
 
 /**
@@ -28,26 +29,32 @@ export async function getLinearConnectionStatus() {
 export async function disconnectLinear() {
   const { withAuth } = await import('@workos-inc/authkit-nextjs');
   const { user } = await withAuth();
-  
+
   if (!user) {
     throw new Error('Unauthorized');
   }
 
-  // Get current tokens to revoke them
-  const tokens = await getLinearTokens(user.id);
-  
-  if (tokens) {
-    // Revoke the access token with Linear
-    try {
-      await revokeLinearToken(tokens.accessToken);
-    } catch (error) {
-      console.error('Failed to revoke Linear token:', error);
-      // Continue with removal even if revocation fails
+  // Get org slug to find the org config
+  const orgSlug = await getLinearOrgSlug(user.id);
+
+  if (orgSlug) {
+    const orgConfig = await getOrgConfig(orgSlug);
+
+    if (orgConfig) {
+      // Revoke the access token with Linear
+      try {
+        await revokeLinearToken(orgConfig.accessToken);
+      } catch (error) {
+        console.error('Failed to revoke Linear token:', error);
+      }
+
+      // Remove org config from Redis
+      await deleteOrgConfig(orgSlug);
     }
   }
 
-  // Remove tokens from WorkOS metadata
-  await removeLinearTokens(user.id);
+  // Remove org slug from WorkOS metadata
+  await removeLinearOrgSlug(user.id);
 
   return { success: true };
 }
