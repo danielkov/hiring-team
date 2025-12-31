@@ -194,7 +194,7 @@ export async function handleCommentToEmail(
     const parentCommentBody = parentComment.body || '';
     const parentBotActor = await parentComment.botActor;
 
-    const isFromOurBot = parentBotActor?.name === 'Clark (bot)';
+    const isFromOurBot = parentBotActor?.name === 'Clark';
     const isEmailSystemComment =
       parentCommentBody.includes('*Confirmation email sent') ||
       parentCommentBody.includes('*Rejection email sent') ||
