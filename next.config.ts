@@ -1,9 +1,16 @@
-import type { NextConfig } from 'next';
+import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  serverExternalPackages: ['canvas', '@napi-rs/canvas', 'pdfjs-dist'],
+  serverExternalPackages: ["canvas", "@napi-rs/canvas", "pdfjs-dist"],
   trailingSlash: false,
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "uploads.linear.app",
+      },
+    ],
+  },
 };
 
 export default nextConfig;

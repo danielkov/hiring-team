@@ -313,9 +313,11 @@ export async function getOrgInfo(
 
   try {
     const organization = await client.organization;
+    const logoUrl = organization.logoUrl;
+    const isPublicLogo = logoUrl && !logoUrl.includes("uploads.linear.app");
     return {
       name: organization.name,
-      logoUrl: organization.logoUrl || undefined,
+      logoUrl: isPublicLogo ? logoUrl : undefined,
     };
   } catch (error) {
     console.error("[getOrgInfo] Failed to fetch organization:", error);

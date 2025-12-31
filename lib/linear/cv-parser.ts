@@ -61,7 +61,7 @@ async function parsePDF(buffer: Buffer): Promise<string> {
   try {
     const { extractText } = await import('unpdf');
 
-    const result = await extractText(buffer);
+    const result = await extractText(new Uint8Array(buffer));
     const joined = result.text.join("\n").trim();
 
     if (!joined) {
